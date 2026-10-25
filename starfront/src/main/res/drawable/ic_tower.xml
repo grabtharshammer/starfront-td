@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Turret base -->
+    <path
+        android:fillColor="#FF172237"
+        android:strokeColor="#FF00E5FF"
+        android:strokeWidth="1.2"
+        android:pathData="M5,9h14a2,2 0,0 1,2 2v8a2,2 0,0 1,-2 2h-14a2,2 0,0 1,-2 -2v-8a2,2 0,0 1,2 -2z" />
+    <!-- Twin barrels -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFCFD8DC"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round"
+        android:pathData="M10.5,14L15,3.5M13.5,15L18,4.5" />
+    <!-- Core -->
+    <path
+        android:fillColor="#FF00E5FF"
+        android:pathData="M12,15m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>

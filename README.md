@@ -7,8 +7,8 @@ A sci-fi tower defense game for Android where the field grows west: a new sector
 Open the project in Android Studio and use Run, or from Git Bash:
 
 ```sh
-scripts/run.sh            # build, install, and launch on the connected phone/emulator
-scripts/run.sh -s SERIAL  # pick a device when several are connected
+scripts/run.sh            # build, install, and launch (prefers a connected phone over the emulator)
+scripts/run.sh -s SERIAL  # pick a specific device, e.g. -s emulator-5554
 ```
 
 The script starts the `Medium_Phone_API_37.0` emulator if nothing is connected (override with `AVD=...`).

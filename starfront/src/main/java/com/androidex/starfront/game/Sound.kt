@@ -17,6 +17,7 @@ enum class Sfx(val volume: Float) {
     SELL(0.55f),
     DENIED(0.5f),
     WAVE_START(0.7f),
+    AIR_RAID(0.75f),
     WAVE_CLEAR(0.6f),
     SECTOR_OPEN(0.8f),
     GAME_OVER(0.9f),

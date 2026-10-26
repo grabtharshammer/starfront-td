@@ -156,6 +156,76 @@ class GameTest {
     }
 
     @Test
+    fun airRaidFollowsSectorOpening() {
+        val g = Game(31)
+        g.credits = 100_000
+        g.lives = 1_000_000
+        // Plenty of ground defence so the early waves clear.
+        for (c in buildableCells(g).sortedByDescending { nearPath(g, it) }.take(10)) g.build(TowerType.PULSE, c.col, c.row)
+        for (t in g.towers) repeat(3) { g.upgrade(t) }
+        val airByWave = ArrayList<Int>()
+        repeat(2 * WAVES_PER_SECTOR + 1) {
+            g.startWave()
+            var air = 0
+            while (g.phase == Phase.WAVE) {
+                g.update(1f / 30)
+                air = maxOf(air, g.enemies.count { it.type.air })
+            }
+            airByWave.add(air)
+            assertEquals(Phase.BUILD, g.phase)
+        }
+        // Waves 6 and 11 open sectors 2 and 3; nothing flies otherwise.
+        val expected = List(airByWave.size) { w -> if (w + 1 == 6) 1 else if (w + 1 == 11) 2 else 0 }
+        assertTrue("air per wave $airByWave", airByWave.zip(expected).all { (a, e) -> if (e == 0) a == 0 else a in 1..e })
+        assertEquals(3, Game.airRaidSize(7))
+    }
+
+    @Test
+    fun onlyUpgradedPulseAndRailHitAir() {
+        val g = Game(2)
+        val ship = Enemy(EnemyType.GUNSHIP, 1f)
+        val crawler = Enemy(EnemyType.GRUNT, 1f)
+        for (type in TowerType.entries) {
+            val t = Tower(type, 0, 0)
+            assertTrue(g.canHit(t, crawler))
+            assertFalse("$type L1", g.canHit(t, ship))
+            t.level = AIR_LEVEL
+            assertEquals("$type L$AIR_LEVEL", type == TowerType.PULSE || type == TowerType.RAIL, g.canHit(t, ship))
+        }
+    }
+
+    @Test
+    fun airUnitsFlyAWavyLineToTheCore() {
+        val g = Game(12)
+        g.world.addSection()
+        // Skip to the wave right after the sector opened.
+        repeat(WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30); if (g.phase == Phase.GAME_OVER) return }
+        g.lives = 1000
+        g.startWave()
+        val ys = ArrayList<Float>()
+        var ship: Enemy? = null
+        while (g.phase == Phase.WAVE) {
+            g.update(1f / 30)
+            ship = ship ?: g.enemies.firstOrNull { it.type.air }
+            ship?.let { if (it.alive) { ys.add(it.y); assertTrue(it.y in 0f..ROWS.toFloat()) } }
+        }
+        assertTrue("ship never flew", ys.size > 100)
+        // It strays well off a straight line and doesn't touch the path's corners.
+        assertTrue(ys.max() - ys.min() > 2f)
+    }
+
+    @Test
+    fun bigGroundUnitsDontOverlap() {
+        val g = Game(9)
+        g.lives = 1000
+        repeat(8) { g.startWave() ; while (g.phase == Phase.WAVE) {
+            g.update(1f / 30)
+            val big = g.enemies.filter { it.alive && !it.type.air && it.radius >= QUEUE_RADIUS && it.dist > 1f }.sortedBy { it.dist }
+            for ((a, b) in big.zipWithNext()) assertTrue("${a.type} and ${b.type} overlap", b.dist - a.dist >= (a.radius + b.radius) * 1.05f)
+        } }
+    }
+
+    @Test
     fun pathsWander() {
         // Most sectors should double back on themselves, not just run straight west.
         var backtracking = 0

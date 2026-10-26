@@ -19,11 +19,11 @@ enum class TowerType(
     /** Sector power the tower draws; each sector has a fixed budget. */
     val power: Int,
 ) {
-    PULSE("Pulse Laser", "Fast bolts", 50, 2.6f, 2.4f, 7f, 0xFF00E5FF.toInt(), 1),
+    PULSE("Pulse Laser", "Air at LV3+", 50, 2.6f, 2.4f, 7f, 0xFF00E5FF.toInt(), 1),
     PLASMA("Plasma Mortar", "Splash damage", 90, 3.2f, 0.7f, 22f, 0xFFFF9100.toInt(), 2),
     CRYO("Cryo Emitter", "Slows in area", 70, 2.0f, 1.0f, 3f, 0xFF80D8FF.toInt(), 2),
     TESLA("Arc Coil", "Chain lightning", 120, 2.4f, 1.0f, 15f, 0xFFB388FF.toInt(), 3),
-    RAIL("Railgun", "Pierces armor", 160, 5.5f, 0.35f, 75f, 0xFF76FF03.toInt(), 3),
+    RAIL("Railgun", "Pierce, air LV3+", 160, 5.5f, 0.35f, 75f, 0xFF76FF03.toInt(), 3),
 }
 
 enum class TargetMode(val label: String) { FIRST("FIRST"), STRONG("STRONG"), CLOSE("CLOSE") }
@@ -65,6 +65,8 @@ enum class EnemyType(
     val coreDamage: Int,
     val radius: Float,
     val color: Int,
+    /** Flies straight for the core instead of following the path; only some towers can hit it. */
+    val air: Boolean = false,
 ) {
     SCOUT("Scout Drone", 18f, 2.2f, 0f, 0f, 4, 1, 0.22f, 0xFFEEFF41.toInt()),
     GRUNT("Crawler", 42f, 1.3f, 0f, 0f, 6, 1, 0.27f, 0xFFFF5252.toInt()),
@@ -72,6 +74,7 @@ enum class EnemyType(
     BRUTE("Juggernaut", 130f, 0.8f, 4f, 0f, 14, 2, 0.36f, 0xFFFF6E40.toInt()),
     PHASE("Phase Wraith", 50f, 1.6f, 0f, 40f, 11, 1, 0.26f, 0xFFF06292.toInt()),
     BOSS("Dreadnought", 700f, 0.55f, 7f, 140f, 120, 8, 0.55f, 0xFFD500F9.toInt()),
+    GUNSHIP("Gunship", 200f, 0.85f, 2f, 0f, 40, 3, 0.45f, 0xFF64FFDA.toInt(), air = true),
 }
 
 class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
@@ -94,6 +97,14 @@ class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
     /** Non-regenerating shield picked up at sector seams. Absorbs damage before anything else. */
     var barrier = 0f
     var maxBarrier = 0f
+    /** Fraction of the route covered, 0..1; compares ground and air units for FIRST targeting. */
+    var progress = 0f
+    /** Furthest [dist] this enemy may advance this frame (keeps big ground units from overlapping). */
+    var limit = Float.MAX_VALUE
+    // Flight path shape for air units.
+    var waveAmp = 0f
+    var waveFreq = 0f
+    var wavePhase = 0f
     val radius get() = type.radius
 
     fun addBarrier(amount: Float) {

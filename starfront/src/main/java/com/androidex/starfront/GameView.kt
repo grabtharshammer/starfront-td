@@ -19,6 +19,7 @@ import android.view.View
 import android.view.WindowInsets
 import com.androidex.starfront.audio.Play
 import com.androidex.starfront.audio.Spatializer
+import com.androidex.starfront.game.AIR_LEVEL
 import com.androidex.starfront.game.BARRIER_COLOR
 import com.androidex.starfront.game.Enemy
 import com.androidex.starfront.game.Sfx
@@ -498,7 +499,7 @@ class GameView(
         val vx0 = camX - 1.5f
         val vx1 = camX + viewW + 1.5f
         for (t in game.towers) if (t.x in vx0..vx1) drawTower(c, t.type, t.level, sx(t.x), sy(t.y), scale, t.angle, time, t.sinceShot)
-        for (e in game.enemies) if (e.x in vx0..vx1) drawEnemy(c, e, time)
+        for (e in game.enemies) if (!e.type.air && e.x in vx0..vx1) drawEnemy(c, e, time)
 
         for (p in game.projectiles) {
             if (p.x !in vx0..vx1) continue
@@ -525,6 +526,9 @@ class GameView(
                 }
             }
         }
+
+        // Air units fly above everything on the ground.
+        for (e in game.enemies) if (e.type.air && e.x in vx0..vx1) drawEnemy(c, e, time)
 
         for (f in game.effects) {
             val a = 1f - f.progress
@@ -785,6 +789,12 @@ class GameView(
         val y = sy(e.y)
         val r = e.radius * scale
         val col = e.type.color
+        if (e.type.air) {
+            // Ground shadow, offset to suggest altitude.
+            fill.color = 0x66000000
+            rect.set(x - r * 0.9f + scale * 0.2f, y - r * 0.45f + scale * 0.45f, x + r * 0.9f + scale * 0.2f, y + r * 0.45f + scale * 0.45f)
+            c.drawOval(rect, fill)
+        }
         c.save()
         c.rotate(Math.toDegrees(e.heading.toDouble()).toFloat(), x, y)
         fill.color = col
@@ -826,6 +836,54 @@ class GameView(
                 path.moveTo(x + r * 1.1f, y); path.lineTo(x, y - r * 0.8f)
                 path.lineTo(x - r * 1.1f, y); path.lineTo(x, y + r * 0.8f); path.close()
                 c.drawPath(path, fill)
+                fill.alpha = 255
+            }
+            EnemyType.GUNSHIP -> {
+                // Engine glow
+                val flick = 0.8f + 0.2f * sin(time * 40f + e.wavePhase)
+                fill.color = 0xFF40C4FF.toInt(); fill.alpha = 150
+                c.drawCircle(x - r * 1.05f, y - r * 0.32f, r * 0.26f * flick, fill)
+                c.drawCircle(x - r * 1.05f, y + r * 0.32f, r * 0.26f * flick, fill)
+                fill.color = Color.WHITE; fill.alpha = 230
+                c.drawCircle(x - r * 1.0f, y - r * 0.32f, r * 0.11f, fill)
+                c.drawCircle(x - r * 1.0f, y + r * 0.32f, r * 0.11f, fill)
+                fill.alpha = 255
+                // Swept wings
+                fill.color = 0xFF455A64.toInt()
+                path.reset()
+                path.moveTo(x + r * 0.2f, y)
+                path.lineTo(x - r * 0.75f, y - r * 1.15f)
+                path.lineTo(x - r * 0.95f, y - r * 1.05f)
+                path.lineTo(x - r * 0.6f, y)
+                path.lineTo(x - r * 0.95f, y + r * 1.05f)
+                path.lineTo(x - r * 0.75f, y + r * 1.15f)
+                path.close()
+                c.drawPath(path, fill)
+                stroke.color = col; stroke.alpha = 255; stroke.strokeWidth = r * 0.08f
+                c.drawLine(x - r * 0.75f, y - r * 1.15f, x - r * 0.95f, y - r * 1.05f, stroke)
+                c.drawLine(x - r * 0.75f, y + r * 1.15f, x - r * 0.95f, y + r * 1.05f, stroke)
+                // Hull
+                fill.color = 0xFFB0BEC5.toInt()
+                path.reset()
+                path.moveTo(x + r * 1.25f, y)
+                path.lineTo(x + r * 0.2f, y - r * 0.38f)
+                path.lineTo(x - r * 1.0f, y - r * 0.45f)
+                path.lineTo(x - r * 0.85f, y)
+                path.lineTo(x - r * 1.0f, y + r * 0.45f)
+                path.lineTo(x + r * 0.2f, y + r * 0.38f)
+                path.close()
+                c.drawPath(path, fill)
+                stroke.color = 0xFF263238.toInt(); stroke.strokeWidth = r * 0.06f
+                c.drawPath(path, stroke)
+                // Accent stripe and cockpit
+                stroke.color = col; stroke.strokeWidth = r * 0.1f
+                c.drawLine(x - r * 0.7f, y, x + r * 0.55f, y, stroke)
+                fill.color = 0xFF1DE9B6.toInt()
+                rect.set(x + r * 0.3f, y - r * 0.17f, x + r * 0.85f, y + r * 0.17f)
+                c.drawOval(rect, fill)
+                fill.color = Color.WHITE; fill.alpha = 180
+                rect.set(x + r * 0.5f, y - r * 0.08f, x + r * 0.72f, y + r * 0.02f)
+                c.drawOval(rect, fill)
                 fill.alpha = 255
             }
             EnemyType.BOSS -> {
@@ -1148,8 +1206,8 @@ class GameView(
         TowerType.PLASMA -> "SPLASH ${fmt(t.splash)}"
         TowerType.CRYO -> "SLOW ${((1 - t.slowFactor) * 100).toInt()}%"
         TowerType.TESLA -> "CHAIN ${t.chainJumps}"
-        TowerType.RAIL -> "PIERCE"
-        TowerType.PULSE -> ""
+        TowerType.RAIL -> if (t.level >= AIR_LEVEL) "PIERCE·AIR" else "AIR@LV$AIR_LEVEL"
+        TowerType.PULSE -> if (t.level >= AIR_LEVEL) "HITS AIR" else "AIR@LV$AIR_LEVEL"
     }
 
     private fun fmt(v: Float) = if (v >= 10f) v.toInt().toString() else String.format("%.1f", v)

@@ -63,6 +63,12 @@ object Synth {
             tone(0.75f, 110f, 165f, Wave.SAW, decay = 3f, attack = 0.08f, vibrato = 6f) * 0.45f,
             tone(0.75f, 55f, 82f, Wave.SQUARE, decay = 3f, attack = 0.08f) * 0.25f,
         )
+        Sfx.AIR_RAID -> concat(
+            tone(0.22f, 720f, 720f, Wave.SQUARE, decay = 1f, attack = 0.01f) * 0.4f,
+            tone(0.22f, 540f, 540f, Wave.SQUARE, decay = 1f, attack = 0.01f) * 0.4f,
+            tone(0.22f, 720f, 720f, Wave.SQUARE, decay = 1f, attack = 0.01f) * 0.4f,
+            tone(0.3f, 540f, 540f, Wave.SQUARE, decay = 6f, attack = 0.01f) * 0.4f,
+        )
         Sfx.WAVE_CLEAR -> notes(0.09f, 523f, 659f, 784f, 1047f, 1319f)
         Sfx.SECTOR_OPEN -> mix(
             noise(1.3f, cutoff = 0.05f, decay = 2f, attack = 0.6f, sweep = -0.4f) * 0.5f,

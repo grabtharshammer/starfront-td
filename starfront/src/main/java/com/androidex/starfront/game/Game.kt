@@ -18,6 +18,10 @@ const val SECTOR_STRENGTH = 0.15f
 const val SEAM_BARRIER = 0.3f
 /** Overall enemy toughness. */
 const val HP_BASE = 1.6f
+/** Pulse lasers and railguns at this level or above can shoot air units. */
+const val AIR_LEVEL = 3
+/** Ground units at least this big queue behind each other instead of overlapping. */
+const val QUEUE_RADIUS = 0.25f
 const val BARRIER_COLOR = 0xFFFFE57F.toInt()
 
 enum class Phase { BUILD, WAVE, GAME_OVER }
@@ -62,6 +66,7 @@ class Game(val seed: Long = Random.nextLong()) {
     private var checkpoint: String? = null
     private val rng = Random(seed xor 0x5DEECE66DL)
     private val tmp = FloatArray(3)
+    private val queue = ArrayList<Enemy>()
 
     val enemiesRemaining get() = spawnQueue.size + enemies.size
 
@@ -142,9 +147,36 @@ class Game(val seed: Long = Random.nextLong()) {
         phase = Phase.WAVE
         waveTime = 0f
         spawnQueue.clear()
-        spawnQueue.addAll(composeWave(wave))
+        val spawns = composeWave(wave).toMutableList()
+        // The first wave after a sector opens brings an air raid with it.
+        if (world.sections.size > 1 && wave == (world.sections.size - 1) * WAVES_PER_SECTOR + 1) {
+            val n = airRaidSize(world.frontier.index)
+            repeat(n) { spawns.add(Spawn(EnemyType.GUNSHIP, 4f + it * 5f)) }
+            spawns.sortBy { it.at }
+            events.add(GameEvent.Message("AIR RAID  ·  $n GUNSHIP${if (n > 1) "S" else ""} INBOUND  ·  LV$AIR_LEVEL PULSE / RAIL ONLY"))
+            sound(Sfx.AIR_RAID)
+        }
+        spawnQueue.addAll(spawns)
         waveSize = spawnQueue.size
         sound(Sfx.WAVE_START)
+    }
+
+    /** Whether [t] is able to shoot [e] at all (air units need a level-3 pulse laser or railgun). */
+    fun canHit(t: Tower, e: Enemy) =
+        !e.type.air || (t.level >= AIR_LEVEL && (t.type == TowerType.PULSE || t.type == TowerType.RAIL))
+
+    // Straight-line flight from the warp gate to the core, for air units.
+    private val airStartX get() = world.minCol - 1.5f
+    private val airLength get() = world.coreCol + 0.5f - airStartX
+
+    private fun airPoint(e: Enemy, d: Float, out: FloatArray) {
+        val u = (d / airLength).coerceIn(0f, 1f)
+        val y0 = world.frontier.entryRow + 0.5f
+        val y1 = world.coreRow + 0.5f
+        // Weave is widest mid-flight and pinches in at the gate and the core.
+        val envelope = sin(Math.PI.toFloat() * u).pow(0.6f)
+        out[0] = airStartX + d
+        out[1] = (y0 + (y1 - y0) * u + e.waveAmp * envelope * sin(d * e.waveFreq + e.wavePhase)).coerceIn(0.4f, ROWS - 0.4f)
     }
 
     fun sound(sfx: Sfx, x: Float = Float.NaN, y: Float = Float.NaN) {
@@ -169,8 +201,16 @@ class Game(val seed: Long = Random.nextLong()) {
         val strength = hpScale(wave) * sectorScale(world.sections.size)
         val e = Enemy(type, strength)
         e.sector = world.frontier.index
-        world.positionAt(0f, tmp)
-        e.x = tmp[0]; e.y = tmp[1]; e.heading = tmp[2]
+        if (type.air) {
+            e.waveAmp = 1.8f + rng.nextFloat() * 1.2f
+            e.waveFreq = 0.35f + rng.nextFloat() * 0.2f
+            e.wavePhase = rng.nextFloat() * 6.2832f
+            airPoint(e, 0f, tmp)
+            e.x = tmp[0]; e.y = tmp[1]
+        } else {
+            world.positionAt(0f, tmp)
+            e.x = tmp[0]; e.y = tmp[1]; e.heading = tmp[2]
+        }
         enemies.add(e)
     }
 
@@ -194,6 +234,18 @@ class Game(val seed: Long = Random.nextLong()) {
     }
 
     private fun updateEnemies(dt: Float) {
+        // Big ground units can't close within touching distance of the one ahead.
+        queue.clear()
+        for (e in enemies) {
+            e.limit = Float.MAX_VALUE
+            if (e.alive && !e.type.air && e.radius >= QUEUE_RADIUS) queue.add(e)
+        }
+        queue.sortByDescending { it.dist }
+        for (i in 1 until queue.size) {
+            val ahead = queue[i - 1]
+            val e = queue[i]
+            e.limit = ahead.dist - (ahead.radius + e.radius) * 1.1f
+        }
         for (e in enemies) {
             if (!e.alive) continue
             e.sinceHit += dt
@@ -205,8 +257,10 @@ class Game(val seed: Long = Random.nextLong()) {
                 e.shieldDelay -= dt
                 if (e.shieldDelay <= 0f) e.shield = minOf(e.maxShield, e.shield + e.maxShield * 0.25f * dt)
             }
-            e.dist += e.type.speed * e.slowFactor * dt
-            if (e.dist >= world.pathLength) {
+            val length = if (e.type.air) airLength else world.pathLength
+            e.dist = max(e.dist, minOf(e.dist + e.type.speed * e.slowFactor * dt, e.limit))
+            e.progress = e.dist / length
+            if (e.dist >= length) {
                 e.alive = false
                 lives = max(0, lives - e.type.coreDamage)
                 effects.add(Fx(FxKind.CORE_HIT, world.coreCol + 0.5f, world.coreRow + 0.5f, e.type.color, 0.6f))
@@ -219,8 +273,17 @@ class Game(val seed: Long = Random.nextLong()) {
                 }
                 continue
             }
-            world.positionAt(e.dist, tmp)
-            e.x = tmp[0]; e.y = tmp[1]; e.heading = tmp[2]
+            if (e.type.air) {
+                airPoint(e, e.dist + 0.05f, tmp)
+                val ax = tmp[0]
+                val ay = tmp[1]
+                airPoint(e, e.dist, tmp)
+                e.heading = kotlin.math.atan2(ay - tmp[1], ax - tmp[0])
+            } else {
+                world.positionAt(e.dist, tmp)
+                e.heading = tmp[2]
+            }
+            e.x = tmp[0]; e.y = tmp[1]
             val sector = World.sectionIndexAt(floor(e.x).toInt())
             if (sector < e.sector) {
                 // Crossed a seam heading east: pick up a barrier.
@@ -256,7 +319,7 @@ class Game(val seed: Long = Random.nextLong()) {
                     sound(Sfx.CRYO, t.x, t.y)
                     val r2 = t.range * t.range
                     for (e in enemies) {
-                        if (!e.alive || sq(e.x - t.x) + sq(e.y - t.y) > r2) continue
+                        if (!e.alive || e.type.air || sq(e.x - t.x) + sq(e.y - t.y) > r2) continue
                         e.slow(t.slowFactor, 1.6f)
                         damage(e, t.damage, false, t)
                     }
@@ -281,9 +344,9 @@ class Game(val seed: Long = Random.nextLong()) {
         for (e in enemies) {
             if (!e.alive || e.dist <= 0.3f) continue
             val d2 = sq(e.x - t.x) + sq(e.y - t.y)
-            if (d2 > r2) continue
+            if (d2 > r2 || !canHit(t, e)) continue
             val score = when (t.mode) {
-                TargetMode.FIRST -> e.dist
+                TargetMode.FIRST -> e.progress
                 TargetMode.STRONG -> e.hp + e.shield + e.barrier
                 TargetMode.CLOSE -> -d2
             }
@@ -310,7 +373,7 @@ class Game(val seed: Long = Random.nextLong()) {
             var next: Enemy? = null
             var nd = 1.8f * 1.8f
             for (o in enemies) {
-                if (!o.alive || o in hit) continue
+                if (!o.alive || o.type.air || o in hit) continue
                 val d2 = sq(o.x - e.x) + sq(o.y - e.y)
                 if (d2 < nd) { nd = d2; next = o }
             }
@@ -324,7 +387,7 @@ class Game(val seed: Long = Random.nextLong()) {
         val dy = sin(t.angle)
         val len = t.range
         for (e in enemies) {
-            if (!e.alive) continue
+            if (!e.alive || !canHit(t, e)) continue
             val px = e.x - t.x
             val py = e.y - t.y
             val along = px * dx + py * dy
@@ -366,7 +429,7 @@ class Game(val seed: Long = Random.nextLong()) {
             ShotKind.ORB -> {
                 val r2 = p.splash * p.splash
                 for (e in enemies) {
-                    if (e.alive && sq(e.x - p.x) + sq(e.y - p.y) <= r2) damage(e, p.damage, false, null)
+                    if (e.alive && !e.type.air && sq(e.x - p.x) + sq(e.y - p.y) <= r2) damage(e, p.damage, false, null)
                 }
                 effects.add(Fx(FxKind.BLAST, p.x, p.y, p.color, 0.35f, size = p.splash))
                 sound(Sfx.IMPACT, p.x, p.y)
@@ -380,8 +443,9 @@ class Game(val seed: Long = Random.nextLong()) {
         val bounty = (e.type.bounty * (1f + 0.04f * (wave - 1))).roundToInt()
         credits += bounty
         floaters.add(Floater("+$bounty", e.x, e.y - 0.2f, 0xFFFFD740.toInt()))
-        val n = if (e.type == EnemyType.BOSS) 40 else 10
-        sound(if (e.type == EnemyType.BOSS) Sfx.EXPLODE_BIG else Sfx.EXPLODE, e.x, e.y)
+        val big = e.type == EnemyType.BOSS || e.type.air
+        val n = if (big) 40 else 10
+        sound(if (big) Sfx.EXPLODE_BIG else Sfx.EXPLODE, e.x, e.y)
         repeat(n) {
             val a = rng.nextFloat() * 6.2832f
             val s = 0.6f + rng.nextFloat() * 2.2f
@@ -457,6 +521,9 @@ class Game(val seed: Long = Random.nextLong()) {
         } catch (e: Exception) {
             null
         }
+
+        /** Gunships in the raid that follows a sector opening: one per sector index, up to three. */
+        fun airRaidSize(sectorIndex: Int) = sectorIndex.coerceIn(1, 3)
 
         /** Each sector opened makes every enemy this much tougher. */
         fun sectorScale(sections: Int) = 1f + SECTOR_STRENGTH * (sections - 1)

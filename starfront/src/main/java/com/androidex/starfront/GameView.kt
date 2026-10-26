@@ -30,6 +30,7 @@ import com.androidex.starfront.game.ShotKind
 import com.androidex.starfront.game.TargetMode
 import com.androidex.starfront.game.Tower
 import com.androidex.starfront.game.TowerType
+import com.androidex.starfront.game.WAVES_PER_SECTOR
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
@@ -332,6 +333,7 @@ class GameView(
         while (game.events.isNotEmpty()) {
             when (val ev = game.events.removeFirst()) {
                 is GameEvent.Message -> showBanner(ev.text)
+                GameEvent.Cleared -> listener.onSave(game.saveState())
                 is GameEvent.Expanded -> {
                     // Glide west so the player sees the new sector open up.
                     camTargetX = ev.section.startCol - SECTION_COLS * 0.35f
@@ -403,7 +405,7 @@ class GameView(
             c.drawText("UNCHARTED", (gx0 + gx1) / 2, sy(ROWS / 2f), text)
             text.textSize = 11 * d
             text.color = 0x998C7CFF.toInt()
-            c.drawText("clear wave ${game.wave + if (game.phase == Phase.WAVE) 0 else 1} to expand", (gx0 + gx1) / 2, sy(ROWS / 2f) + 20 * d, text)
+            c.drawText("clear wave ${game.nextExpansionWave} to expand", (gx0 + gx1) / 2, sy(ROWS / 2f) + 20 * d, text)
         }
 
         // Sector floors
@@ -563,7 +565,7 @@ class GameView(
         text.alpha = 255
 
         if (game.wave == 0 && game.towers.size < 2 && !selected) {
-            hint(c, "TAP A TILE BESIDE THE PATH TO BUILD  ·  EACH CLEARED WAVE OPENS A NEW SECTOR WEST")
+            hint(c, "TAP A TILE BESIDE THE PATH TO BUILD  ·  EVERY $WAVES_PER_SECTOR WAVES A NEW SECTOR OPENS WEST")
         } else if (game.wave in 1..2 && game.phase == Phase.BUILD && !selected) {
             hint(c, "SWIPE EAST TO UPGRADE OR SWAP OLDER TOWERS  ·  PINCH TO ZOOM  ·  TAP MINIMAP TO JUMP")
         }

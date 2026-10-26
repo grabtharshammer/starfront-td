@@ -5,8 +5,10 @@ import kotlin.math.hypot
 import kotlin.random.Random
 
 const val ROWS = 9
-const val FIRST_SECTION_COLS = 12
-const val SECTION_COLS = 8
+// Widths are odd so the path lattice (see carve) has a node column next to each edge.
+const val FIRST_SECTION_COLS = 15
+const val SECTION_COLS = 13
+const val WAVES_PER_SECTOR = 5
 
 data class Cell(val col: Int, val row: Int)
 
@@ -54,9 +56,8 @@ class World(val seed: Long) {
         val rng = Random(seed * 1_000_003L + index * 7_919L)
         val width = if (index == 0) FIRST_SECTION_COLS else SECTION_COLS
         val startCol = if (index == 0) 0 else minCol - width
-        val exitRow = if (index == 0) ROWS / 2 else frontier.entryRow
-        val turns = if (index == 0) 3 + rng.nextInt(2) else 2 + rng.nextInt(2)
-        val (path, entryRow) = carve(rng, startCol, width, exitRow, turns)
+        val exitRow = if (index == 0) ROWS / 2 - 1 else frontier.entryRow
+        val (path, entryRow) = carve(rng, startCol, width, exitRow)
         val section = Section(index, startCol, width, entryRow, exitRow, path)
         sections.add(section)
         for (c in path) pathKeys.add(key(c.col, c.row))
@@ -135,33 +136,77 @@ class World(val seed: Long) {
         fun key(col: Int, row: Int): Long = (col.toLong() shl 32) or (row.toLong() and 0xffffffffL)
 
         /**
-         * Carves a snaking path across one section, from its east edge at [exitRow] back to the
-         * west edge. Turns happen in columns at least two apart so the path never touches itself.
+         * Carves a wandering path across one section, from its east edge at [exitRow] to the
+         * west edge. The path is a random self-avoiding walk over a lattice of nodes on odd
+         * local columns and odd rows, joined through the cells between them. Because nodes sit
+         * two cells apart, separate stretches of path always have a buildable gap between them.
          * Returns the path ordered west to east and the row it enters on.
          */
-        fun carve(rng: Random, startCol: Int, width: Int, exitRow: Int, turns: Int): Pair<List<Cell>, Int> {
-            val turnCols = HashSet<Int>()
-            for (c in (1..width - 2).shuffled(rng)) {
-                if (turnCols.size >= turns) break
-                if (turnCols.all { abs(it - c) >= 2 }) turnCols.add(c)
+        fun carve(rng: Random, startCol: Int, width: Int, exitRow: Int): Pair<List<Cell>, Int> {
+            val cols = (width - 1) / 2 // node columns at local 1, 3, ..., width - 2
+            val rows = (ROWS - 1) / 2 // node rows at 1, 3, ..., ROWS - 2
+            val startRow = (exitRow - 1) / 2
+            val target = (cols * rows * 0.7f).toInt()
+
+            // Many random walks from the east node column; keep the one that reaches the west
+            // column with a length near target, favouring walks that double back east and
+            // penalising long straight runs. Straight across is the fallback.
+            fun score(walk: List<Int>): Int {
+                var s = abs(walk.size - target)
+                var run = 1
+                for (i in 1 until walk.size) {
+                    val step = walk[i] - walk[i - 1]
+                    if (step == rows) s -= 2
+                    run = if (i >= 2 && step == walk[i - 1] - walk[i - 2]) run + 1 else 1
+                    if (run > 2) s += 2
+                }
+                return s
             }
-            val cells = ArrayList<Cell>()
-            var row = exitRow
-            for (local in width - 1 downTo 0) {
-                val col = startCol + local
-                cells.add(Cell(col, row))
-                if (local in turnCols) {
-                    val options = (1..ROWS - 2).filter { abs(it - row) >= 2 }
-                    val newRow = options[rng.nextInt(options.size)]
-                    val step = if (newRow > row) 1 else -1
-                    while (row != newRow) {
-                        row += step
-                        cells.add(Cell(col, row))
+            var best: List<Int> = (cols - 1 downTo 0).map { it * rows + startRow }
+            var bestScore = score(best)
+            val visited = BooleanArray(cols * rows)
+            repeat(400) {
+                visited.fill(false)
+                val walk = ArrayList<Int>()
+                var cur = (cols - 1) * rows + startRow
+                while (true) {
+                    walk.add(cur)
+                    visited[cur] = true
+                    val c = cur / rows
+                    val r = cur % rows
+                    if (c == 0 && (walk.size >= target || rng.nextInt(3) == 0)) break
+                    val next = ArrayList<Int>(4)
+                    if (c > 0 && !visited[cur - rows]) next.add(cur - rows)
+                    if (c < cols - 1 && !visited[cur + rows]) next.add(cur + rows)
+                    if (r > 0 && !visited[cur - 1]) next.add(cur - 1)
+                    if (r < rows - 1 && !visited[cur + 1]) next.add(cur + 1)
+                    if (next.isEmpty()) break
+                    cur = next[rng.nextInt(next.size)]
+                }
+                if (walk.last() / rows == 0) {
+                    val score = score(walk)
+                    if (score < bestScore) {
+                        best = walk
+                        bestScore = score
                     }
                 }
             }
+
+            // Expand nodes into cells, east edge to west edge.
+            val cells = ArrayList<Cell>()
+            fun cell(local: Int, row: Int) = Cell(startCol + local, row)
+            cells.add(cell(width - 1, exitRow))
+            var prev: Cell? = null
+            for (n in best) {
+                val here = cell(1 + 2 * (n / rows), 1 + 2 * (n % rows))
+                prev?.let { cells.add(Cell((it.col + here.col) / 2, (it.row + here.row) / 2)) }
+                cells.add(here)
+                prev = here
+            }
+            val entryRow = prev!!.row
+            cells.add(cell(0, entryRow))
             cells.reverse()
-            return cells to row
+            return cells to entryRow
         }
     }
 }

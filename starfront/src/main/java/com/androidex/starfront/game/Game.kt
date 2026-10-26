@@ -17,6 +17,7 @@ enum class Phase { BUILD, WAVE, GAME_OVER }
 sealed class GameEvent {
     class Message(val text: String) : GameEvent()
     class Expanded(val section: Section) : GameEvent()
+    object Cleared : GameEvent()
     class GameOver(val wave: Int) : GameEvent()
 }
 
@@ -53,6 +54,10 @@ class Game(val seed: Long = Random.nextLong()) {
     private val tmp = FloatArray(3)
 
     val enemiesRemaining get() = spawnQueue.size + enemies.size
+
+    /** The wave whose clearing opens the next sector. */
+    val nextExpansionWave get() = (wave / WAVES_PER_SECTOR + 1) * WAVES_PER_SECTOR -
+        if (phase == Phase.WAVE && wave % WAVES_PER_SECTOR == 0) WAVES_PER_SECTOR else 0
 
     // ---- Building ----
 
@@ -140,11 +145,17 @@ class Game(val seed: Long = Random.nextLong()) {
         val bonus = 20 + 6 * wave
         credits += bonus
         projectiles.clear()
-        val s = world.addSection()
         phase = Phase.BUILD
         checkpoint = null
-        events.add(GameEvent.Message("WAVE $wave CLEARED  +$bonus  ·  SECTOR ${s.index + 1} ONLINE"))
-        events.add(GameEvent.Expanded(s))
+        if (wave % WAVES_PER_SECTOR == 0) {
+            val s = world.addSection()
+            events.add(GameEvent.Message("WAVE $wave CLEARED  +$bonus  ·  SECTOR ${s.index + 1} ONLINE"))
+            events.add(GameEvent.Expanded(s))
+        } else {
+            val left = nextExpansionWave - wave
+            events.add(GameEvent.Message("WAVE $wave CLEARED  +$bonus  ·  NEW SECTOR IN $left"))
+            events.add(GameEvent.Cleared)
+        }
     }
 
     private fun updateEnemies(dt: Float) {
@@ -357,7 +368,7 @@ class Game(val seed: Long = Random.nextLong()) {
     }
 
     companion object {
-        private const val HEADER = "starfront/1"
+        private const val HEADER = "starfront/2"
 
         fun restore(text: String): Game? = try {
             val lines = text.lines().filter { it.isNotBlank() }

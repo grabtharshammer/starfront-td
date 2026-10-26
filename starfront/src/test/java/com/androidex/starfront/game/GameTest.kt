@@ -70,21 +70,46 @@ class GameTest {
     }
 
     @Test
-    fun clearingAWaveExpandsTheField() {
+    fun fieldExpandsEveryFiveWaves() {
         val g = Game(11)
-        // Ring the start of the path with towers so wave 1 can't get through.
-        for (c in buildableCells(g).sortedByDescending { nearPath(g, it) }.take(4)) g.build(TowerType.PULSE, c.col, c.row)
+        // Plenty of credits and towers by the path so the early waves can't get through.
+        g.credits = 2000
+        for (c in buildableCells(g).sortedByDescending { nearPath(g, it) }.take(10)) g.build(TowerType.PULSE, c.col, c.row)
         val oldMin = g.world.minCol
         val towers = g.towers.toList()
+        for (w in 1 until WAVES_PER_SECTOR) {
+            assertEquals(WAVES_PER_SECTOR, g.nextExpansionWave)
+            g.startWave()
+            runWave(g)
+            assertEquals(Phase.BUILD, g.phase)
+            assertEquals("after wave $w", 1, g.world.sections.size)
+        }
+        assertTrue(g.events.none { it is GameEvent.Expanded })
         g.startWave()
+        assertEquals(WAVES_PER_SECTOR, g.nextExpansionWave)
         runWave(g)
         assertEquals(Phase.BUILD, g.phase)
         assertEquals(2, g.world.sections.size)
         assertEquals(oldMin - SECTION_COLS, g.world.minCol)
         assertEquals(towers, g.towers)
         assertTrue(g.events.any { it is GameEvent.Expanded })
+        assertEquals(2 * WAVES_PER_SECTOR, g.nextExpansionWave)
         // The new sector is open for building.
         assertTrue(g.canBuild(g.world.minCol, (0 until ROWS).first { !g.world.isPath(g.world.minCol, it) }))
+    }
+
+    @Test
+    fun pathsWander() {
+        // Most sectors should double back on themselves, not just run straight west.
+        var backtracking = 0
+        for (seed in 1L..50L) {
+            val world = World(seed)
+            world.addSection()
+            val path = world.sections[1].path
+            if (path.zipWithNext().any { (a, b) -> b.col < a.col }) backtracking++
+            assertTrue("seed $seed path too short: ${path.size}", path.size > SECTION_COLS * 2)
+        }
+        assertTrue("only $backtracking/50 sectors backtrack", backtracking >= 35)
     }
 
     @Test
@@ -136,16 +161,13 @@ class GameTest {
     private fun playBot(g: Game, maxWaves: Int): Int {
         val types = TowerType.entries
         while (g.phase != Phase.GAME_OVER && g.wave < maxWaves) {
-            // Spend: new towers in the freshest sector first, then upgrade the cheapest-to-upgrade tower.
             var spent = true
             while (spent) {
                 spent = false
+                // Spend: alternate new towers by the path with upgrading the cheapest-to-upgrade tower.
                 val type = types[(g.towers.size * 7 + g.wave) % types.size]
-                val frontierCols = g.world.frontier.startCol until g.world.frontier.endCol
-                val inFrontier = g.towers.count { it.col in frontierCols }
-                if (inFrontier < 4 && g.credits >= type.cost) {
-                    val cell = buildableCells(g).filter { it.col in frontierCols || g.towers.size < 6 }
-                        .maxByOrNull { nearPath(g, it) }
+                if (g.towers.size < 3 + g.wave && g.credits >= type.cost) {
+                    val cell = buildableCells(g).maxByOrNull { nearPath(g, it) }
                     if (cell != null && g.build(type, cell.col, cell.row) != null) spent = true
                 } else {
                     val t = g.towers.filter { it.upgradeCost != null }.minByOrNull { it.upgradeCost!! }

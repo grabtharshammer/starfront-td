@@ -44,12 +44,19 @@ class UiKit(private val d: Float) {
         buttons.add(Btn(br, true, action))
     }
 
-    /** A panel card with an [accent] border; tappable when [action] is given. */
-    fun card(c: Canvas, l: Float, t: Float, r: Float, b: Float, accent: Int, enabled: Boolean, action: (() -> Unit)?) {
+    /**
+     * A panel card with an [accent] border; tappable when [action] is given. It looks dimmed when
+     * [dimmed] (by default, when not [enabled]) and gets a bright border when [highlight].
+     */
+    fun card(
+        c: Canvas, l: Float, t: Float, r: Float, b: Float, accent: Int, enabled: Boolean,
+        dimmed: Boolean = !enabled, highlight: Boolean = false, action: (() -> Unit)?,
+    ) {
         val cr = RectF(l, t, r, b)
-        fill.color = if (enabled) 0xFF0F1A2C.toInt() else 0xFF0B111C.toInt()
+        fill.color = if (highlight) 0xFF1A2B45.toInt() else if (!dimmed) 0xFF0F1A2C.toInt() else 0xFF0B111C.toInt()
         c.drawRoundRect(cr, 10 * d, 10 * d, fill)
-        stroke.color = accent; stroke.alpha = if (enabled) 220 else 120; stroke.strokeWidth = 1.5f * d
+        stroke.color = accent; stroke.alpha = if (highlight) 255 else if (!dimmed) 220 else 120
+        stroke.strokeWidth = (if (highlight) 3f else 1.5f) * d
         c.drawRoundRect(cr, 10 * d, 10 * d, stroke)
         stroke.alpha = 255
         if (action != null) buttons.add(Btn(cr, enabled, action))

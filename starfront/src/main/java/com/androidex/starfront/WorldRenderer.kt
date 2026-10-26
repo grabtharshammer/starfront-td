@@ -19,6 +19,7 @@ import com.androidex.starfront.game.ROWS
 import com.androidex.starfront.game.SECTION_COLS
 import com.androidex.starfront.game.Section
 import com.androidex.starfront.game.ShotKind
+import com.androidex.starfront.game.TowerType
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
@@ -52,8 +53,8 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         bg.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF04050D.toInt(), 0xFF0D0820.toInt(), Shader.TileMode.CLAMP)
     }
 
-    /** Draws the whole field; [selection] is the highlighted cell, if any. */
-    fun draw(c: Canvas, game: Game, selection: Cell?, w: Float, h: Float) {
+    /** Draws the whole field; [selection] is the highlighted cell, if any, and [preview] a tower type being considered for it. */
+    fun draw(c: Canvas, game: Game, selection: Cell?, preview: TowerType?, w: Float, h: Float) {
         val world = game.world
         val time = game.clock
         c.drawRect(0f, 0f, w, h, bg)
@@ -70,7 +71,7 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         drawGate(c, world.minCol - 1f, world.frontier.entryRow + 0.5f, time)
         drawCore(c, game, world.coreCol + 0.5f, world.coreRow + 0.5f, time)
 
-        if (selection != null) drawSelection(c, game, selection, time)
+        if (selection != null) drawSelection(c, game, selection, preview, time)
 
         val vx0 = camera.x - 1.5f
         val vx1 = camera.x + camera.viewW + 1.5f
@@ -255,21 +256,35 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         c.drawCircle(x, y, scale * 0.08f, fill)
     }
 
-    /** Pulsing outline on the selected cell, plus the range of the tower on it. */
-    private fun drawSelection(c: Canvas, game: Game, sel: Cell, time: Float) {
+    /**
+     * Pulsing outline on the selected cell, plus the range of the tower on it, or of the
+     * [preview] type (drawn as a ghost) when the cell is empty.
+     */
+    private fun drawSelection(c: Canvas, game: Game, sel: Cell, preview: TowerType?, time: Float) {
         val t = game.towerAt(sel.col, sel.row)
+        val cx = sx(sel.col + 0.5f)
+        val cy = sy(sel.row + 0.5f)
         if (t != null) {
-            fill.color = t.type.color; fill.alpha = 28
-            c.drawCircle(sx(t.x), sy(t.y), t.range * scale, fill)
-            fill.alpha = 255
-            stroke.color = t.type.color; stroke.alpha = 140; stroke.strokeWidth = 1.5f * d
-            c.drawCircle(sx(t.x), sy(t.y), t.range * scale, stroke)
-            stroke.alpha = 255
+            drawRange(c, cx, cy, t.range, t.type.color)
+        } else if (preview != null) {
+            drawRange(c, cx, cy, Balance.range(preview.range, 1), preview.color)
+            c.saveLayerAlpha(null, 120)
+            sprites.tower(c, preview, 1, cx, cy, scale, -0.6f, time, 10f)
+            c.restore()
         }
         stroke.color = Color.WHITE
         stroke.strokeWidth = 2 * d
         stroke.alpha = (180 + 70 * sin(time * 6f)).toInt()
         c.drawRect(sx(sel.col.toFloat()) + 2, sy(sel.row.toFloat()) + 2, sx(sel.col + 1f) - 2, sy(sel.row + 1f) - 2, stroke)
+        stroke.alpha = 255
+    }
+
+    private fun drawRange(c: Canvas, x: Float, y: Float, range: Float, color: Int) {
+        fill.color = color; fill.alpha = 28
+        c.drawCircle(x, y, range * scale, fill)
+        fill.alpha = 255
+        stroke.color = color; stroke.alpha = 140; stroke.strokeWidth = 1.5f * d
+        c.drawCircle(x, y, range * scale, stroke)
         stroke.alpha = 255
     }
 

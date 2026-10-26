@@ -66,6 +66,8 @@ class GameView(
     private var selected = false
     private var selCol = 0
     private var selRow = 0
+    // Tower type previewed on the selected empty cell: first tap on a build card previews, second buys.
+    private var preview: TowerType? = null
 
     private val camera = Camera(hudH, { game.world }, { if (selected) panelH else 0f })
     private val sprites = Sprites(d)
@@ -216,6 +218,7 @@ class GameView(
             return
         }
         if (regionAt(x, y) != Region.MAP) return
+        preview = null
         val col = camera.colAt(x)
         val row = camera.rowAt(y)
         if (selected && col == selCol && row == selRow) {
@@ -244,7 +247,7 @@ class GameView(
         lastFrame = now
         step(dt)
         ui.beginFrame()
-        renderer.draw(canvas, game, if (selected) Cell(selCol, selRow) else null, width.toFloat(), height.toFloat())
+        renderer.draw(canvas, game, if (selected) Cell(selCol, selRow) else null, preview, width.toFloat(), height.toFloat())
         drawHint(canvas)
         drawHud(canvas)
         if (selected && !paused) drawPanel(canvas)
@@ -485,7 +488,10 @@ class GameView(
         if (tower == null) drawBuildCards(c, l, r, ct, cb) else drawTowerCards(c, tower, l, r, ct, cb)
     }
 
-    /** One card per tower type for an empty cell. */
+    /**
+     * One card per tower type for an empty cell. The first tap on a card previews that tower
+     * (ghost and range on the map); a second tap on the same card buys it.
+     */
     private fun drawBuildCards(c: Canvas, l: Float, r: Float, ct: Float, cb: Float) {
         val types = TowerType.entries
         val cw = min(190 * d, (r - l - pad * (types.size - 1)) / types.size)
@@ -493,12 +499,26 @@ class GameView(
         for (type in types) {
             val powered = game.hasPowerFor(type, selCol)
             val ok = game.credits >= type.cost && powered
-            ui.card(c, x, ct, x + cw, cb, if (ok) type.color else 0xFF37474F.toInt(), ok) {
-                if (game.build(type, selCol, selRow) != null) performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            val previewing = preview == type
+            ui.card(c, x, ct, x + cw, cb, if (ok || previewing) type.color else 0xFF37474F.toInt(), true, dimmed = !ok, highlight = previewing) {
+                when {
+                    !previewing -> preview = type
+                    game.build(type, selCol, selRow) != null -> {
+                        preview = null
+                        performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    }
+                    else -> game.sound(Sfx.DENIED)
+                }
             }
             sprites.tower(c, type, 1, x + 28 * d, ct + 30 * d, 44 * d, -0.6f, game.clock, 10f)
             ui.cardText(c, x + 58 * d, ct + 22 * d, type.title.uppercase(), 11f, Color.WHITE, x + cw - 6 * d)
-            ui.cardText(c, x + 58 * d, ct + 40 * d, type.blurb, 10f, 0xFF90A4AE.toInt(), x + cw - 6 * d)
+            val status = when {
+                !previewing -> type.blurb
+                !powered -> "NO POWER"
+                !ok -> "NEED CREDITS"
+                else -> "TAP TO BUY"
+            }
+            ui.cardText(c, x + 58 * d, ct + 40 * d, status, 10f, if (!previewing) 0xFF90A4AE.toInt() else if (ok) 0xFF69F0AE.toInt() else 0xFFFF5252.toInt(), x + cw - 6 * d)
             ui.cardText(c, x + 10 * d, cb - 12 * d, "${type.cost}", 15f, if (game.credits >= type.cost) 0xFFFFD740.toInt() else 0xFFFF5252.toInt(), x + cw)
             ui.cardText(c, x + cw * 0.42f, cb - 12 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
             ui.cardText(c, x + cw * 0.7f, cb - 12 * d, "P${type.power}", 10f, if (powered) 0xFF40C4FF.toInt() else 0xFFFF5252.toInt(), x + cw)
@@ -515,7 +535,7 @@ class GameView(
         var x = l
 
         val iw = unit * 2.4f
-        ui.card(c, x, ct, x + iw, cb, tower.type.color, true, null)
+        ui.card(c, x, ct, x + iw, cb, tower.type.color, true, action = null)
         sprites.tower(c, tower.type, tower.level, x + 30 * d, ct + 32 * d, 46 * d, tower.angle, game.clock, 10f)
         ui.cardText(c, x + 60 * d, ct + 20 * d, tower.type.title.uppercase(), 12f, Color.WHITE, x + iw - 4 * d)
         ui.cardText(c, x + 60 * d, ct + 37 * d, "LV ${tower.level}/${Balance.MAX_LEVEL} · ${tower.kills} KILLS", 10f, 0xFFFFD740.toInt(), x + iw - 4 * d)

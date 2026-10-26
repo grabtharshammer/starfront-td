@@ -271,6 +271,27 @@ class GameTest {
     }
 
     @Test
+    fun cosmeticEffectsDontChangeGameplay() {
+        // Same seed; one game also burns through cosmetic randomness every frame.
+        fun play(extraDebris: Boolean): String {
+            val g = Game(77)
+            g.lives = 1_000_000
+            val trace = StringBuilder()
+            while (g.wave < 7) {
+                g.startWave()
+                while (g.phase == Phase.WAVE) {
+                    if (extraDebris) g.feedback.debris(0f, 0f, 0, 5)
+                    g.update(1f / 30)
+                    for (e in g.enemies) if (e.type.layer == Layer.AIR) trace.append(e.y).append(',')
+                }
+            }
+            assertTrue("no air raid reached", trace.isNotEmpty())
+            return trace.toString()
+        }
+        assertEquals(play(false), play(true))
+    }
+
+    @Test
     fun pathsWander() {
         // Most sectors should double back on themselves, not just run straight west.
         var backtracking = 0

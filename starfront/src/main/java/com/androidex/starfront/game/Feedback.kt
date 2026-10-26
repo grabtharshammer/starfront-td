@@ -6,15 +6,20 @@ import kotlin.random.Random
 
 /**
  * What the simulation reports outward for presentation: short-lived visuals, floating numbers,
- * sounds and game events. The view reads and drains these; gameplay never reads them back.
+ * sounds and game events. The view reads and drains these; gameplay never reads them back, and
+ * [rng] is used only here, so cosmetic changes can't shift gameplay randomness.
  */
 class Feedback(private val rng: Random) {
     val effects = ArrayList<Fx>()
     val particles = ArrayList<Particle>()
     val floaters = ArrayList<Floater>()
     val events = ArrayDeque<GameEvent>()
-    /** Sounds requested since the view last drained them (capped so headless runs don't pile up). */
-    val sounds = ArrayList<SoundEvent>()
+
+    /**
+     * Receives each sound as it happens; the view decides what's audible. Null when nothing is
+     * listening (tests, headless runs), in which case sounds are simply dropped.
+     */
+    var onSound: ((SoundEvent) -> Unit)? = null
 
     fun event(e: GameEvent) {
         events.add(e)
@@ -23,7 +28,7 @@ class Feedback(private val rng: Random) {
     fun message(text: String) = event(GameEvent.Message(text))
 
     fun sound(sfx: Sfx, x: Float = Float.NaN, y: Float = Float.NaN) {
-        if (sounds.size < 64) sounds.add(SoundEvent(sfx, x, y))
+        onSound?.invoke(SoundEvent(sfx, x, y))
     }
 
     fun fx(kind: FxKind, x: Float, y: Float, color: Int, life: Float, points: FloatArray? = null, size: Float = 1f) {

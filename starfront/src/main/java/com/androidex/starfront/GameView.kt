@@ -101,6 +101,11 @@ class GameView(
     private val path get() = ui.path
     private val rect get() = ui.rect
 
+    /** Routes the game's sounds into the spatializer, which keeps what's audible this frame. */
+    private fun listenTo(g: Game) {
+        g.feedback.onSound = spatializer::offer
+    }
+
     private val gesture = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean {
             camera.stopFling()
@@ -137,6 +142,7 @@ class GameView(
     })
 
     init {
+        listenTo(game)
         isHapticFeedbackEnabled = true
         setOnApplyWindowInsetsListener { _, insets ->
             val cut = insets.getInsets(WindowInsets.Type.displayCutout() or WindowInsets.Type.systemGestures())
@@ -164,6 +170,7 @@ class GameView(
 
     private fun newGame() {
         game = Game()
+        listenTo(game)
         selected = false
         paused = false
         speed = 1
@@ -246,6 +253,7 @@ class GameView(
     }
 
     private fun step(dt: Float) {
+        spatializer.setView(camera.x, camera.y, camera.x + camera.viewW, camera.y + camera.viewH)
         if (running && !paused) {
             var remaining = dt * speed
             while (remaining > 0f) {
@@ -282,13 +290,9 @@ class GameView(
 
     /** Plays this frame's sounds from what's on screen: off-screen sources stay silent. */
     private fun playSounds() {
-        if (game.sounds.isEmpty()) return
-        val sink = soundSink
-        if (sink != null && !muted && width > 0) {
-            val plays = spatializer.mix(game.sounds, camera.x, camera.y, camera.x + camera.viewW, camera.y + camera.viewH, System.nanoTime() / 1e9)
-            for (p in plays) sink(p)
-        }
-        game.sounds.clear()
+        val plays = spatializer.finish(System.nanoTime() / 1e9)
+        val sink = soundSink ?: return
+        if (!muted) for (p in plays) sink(p)
     }
 
     private fun launch() {

@@ -21,9 +21,10 @@ sealed class GameEvent {
  */
 class Game(val seed: Long = Random.nextLong()) {
     val world = World(seed)
+    /** Gameplay randomness (air raid flight paths). Cosmetic effects have their own in [Feedback]. */
     internal val rng = Random(seed xor 0x5DEECE66DL)
 
-    val feedback = Feedback(rng)
+    val feedback = Feedback(Random(seed xor 0x2545F4914F6CDD1DL))
     val defenses = Defenses(this)
     val waves = WaveDirector(this)
     internal val movement = Movement(this)
@@ -52,7 +53,6 @@ class Game(val seed: Long = Random.nextLong()) {
     val particles get() = feedback.particles
     val floaters get() = feedback.floaters
     val events get() = feedback.events
-    val sounds get() = feedback.sounds
 
     val waveSize get() = waves.size
     val enemiesRemaining get() = waves.remaining

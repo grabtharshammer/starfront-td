@@ -63,11 +63,36 @@ class AudioTest {
     @Test
     fun gameRequestsSounds() {
         val g = Game(4)
+        val heard = ArrayList<SoundEvent>()
+        g.feedback.onSound = { heard.add(it) }
         g.startWave()
-        assertTrue(g.sounds.any { it.sfx == Sfx.WAVE_START && !it.positional })
-        g.sounds.clear()
+        assertTrue(heard.any { it.sfx == Sfx.WAVE_START && !it.positional })
+        heard.clear()
         while (g.phase == Phase.WAVE) g.update(1f / 30)
-        assertTrue(g.sounds.any { it.sfx == Sfx.CORE_HIT && it.positional })
-        assertTrue(g.sounds.size <= 64)
+        assertTrue(heard.any { it.sfx == Sfx.CORE_HIT && it.positional })
+    }
+
+    @Test
+    fun busyFrameDoesNotCrowdOutWhatsOnScreen() {
+        val sp = Spatializer()
+        sp.setView(0f, 0f, 20f, 10f)
+        // Hundreds of off-screen explosions first, then one in view.
+        repeat(500) { sp.offer(SoundEvent(Sfx.EXPLODE, -50f - it, 5f)) }
+        repeat(500) { sp.offer(SoundEvent(Sfx.PULSE, 100f + it, 5f)) }
+        sp.offer(SoundEvent(Sfx.EXPLODE, 12f, 5f))
+        val plays = sp.finish(0.0)
+        assertEquals(listOf(Sfx.EXPLODE), plays.map { it.sfx })
+        // The next frame starts empty.
+        assertTrue(sp.finish(1.0).isEmpty())
+    }
+
+    @Test
+    fun soundsWithoutAListenerAreDropped() {
+        val g = Game(4)
+        repeat(10_000) { g.sound(Sfx.PULSE, 1f, 1f) }
+        g.startWave()
+        while (g.phase == Phase.WAVE) g.update(1f / 30)
+        // Nothing to assert beyond not accumulating: there is no buffer to grow.
+        assertTrue(g.feedback.onSound == null)
     }
 }

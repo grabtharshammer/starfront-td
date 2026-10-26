@@ -81,6 +81,7 @@ class GameView(
         }
     private var lastFrame = System.nanoTime()
     private var paused = false
+    // Speed setting shown on the HUD (x1/x2). The old real-time x1 was too slow, so x1 runs the simulation at 2x and x2 at 3x.
     private var speed = 1
     private var autoLaunch = false
     private var autoTimer = 0f
@@ -255,7 +256,7 @@ class GameView(
     private fun step(dt: Float) {
         spatializer.setView(camera.x, camera.y, camera.x + camera.viewW, camera.y + camera.viewH)
         if (running && !paused) {
-            var remaining = dt * speed
+            var remaining = dt * (speed + 1)
             while (remaining > 0f) {
                 val s = min(remaining, 1f / 60f)
                 game.update(s)
@@ -415,7 +416,7 @@ class GameView(
         ui.hudButton(c, rx - autoW, by, rx, by + bh, "AUTO", autoLaunch) { autoLaunch = !autoLaunch }
         rx -= autoW + 6 * d
         val speedW = 48 * d
-        ui.hudButton(c, rx - speedW, by, rx, by + bh, "x$speed", speed > 1) { speed = if (speed >= 3) 1 else speed + 1 }
+        ui.hudButton(c, rx - speedW, by, rx, by + bh, "x$speed", speed > 1) { speed = if (speed >= 2) 1 else 2 }
         rx -= speedW + 6 * d
         val pauseW = 44 * d
         ui.hudButton(c, rx - pauseW, by, rx, by + bh, "", paused) { paused = !paused }

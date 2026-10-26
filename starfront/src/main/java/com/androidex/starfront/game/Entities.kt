@@ -16,12 +16,14 @@ enum class TowerType(
     val rate: Float,
     val damage: Float,
     val color: Int,
+    /** Sector power the tower draws; each sector has a fixed budget. */
+    val power: Int,
 ) {
-    PULSE("Pulse Laser", "Fast bolts", 50, 2.6f, 2.4f, 7f, 0xFF00E5FF.toInt()),
-    PLASMA("Plasma Mortar", "Splash damage", 90, 3.2f, 0.7f, 22f, 0xFFFF9100.toInt()),
-    CRYO("Cryo Emitter", "Slows in area", 70, 2.0f, 1.0f, 3f, 0xFF80D8FF.toInt()),
-    TESLA("Arc Coil", "Chain lightning", 120, 2.4f, 1.0f, 15f, 0xFFB388FF.toInt()),
-    RAIL("Railgun", "Pierces armor", 160, 5.5f, 0.35f, 75f, 0xFF76FF03.toInt()),
+    PULSE("Pulse Laser", "Fast bolts", 50, 2.6f, 2.4f, 7f, 0xFF00E5FF.toInt(), 1),
+    PLASMA("Plasma Mortar", "Splash damage", 90, 3.2f, 0.7f, 22f, 0xFFFF9100.toInt(), 2),
+    CRYO("Cryo Emitter", "Slows in area", 70, 2.0f, 1.0f, 3f, 0xFF80D8FF.toInt(), 2),
+    TESLA("Arc Coil", "Chain lightning", 120, 2.4f, 1.0f, 15f, 0xFFB388FF.toInt(), 3),
+    RAIL("Railgun", "Pierces armor", 160, 5.5f, 0.35f, 75f, 0xFF76FF03.toInt(), 3),
 }
 
 enum class TargetMode(val label: String) { FIRST("FIRST"), STRONG("STRONG"), CLOSE("CLOSE") }

@@ -26,6 +26,7 @@ import com.androidex.starfront.game.GameEvent
 import com.androidex.starfront.game.MAX_LEVEL
 import com.androidex.starfront.game.Phase
 import com.androidex.starfront.game.ROWS
+import com.androidex.starfront.game.Section
 import com.androidex.starfront.game.SECTION_COLS
 import com.androidex.starfront.game.ShotKind
 import com.androidex.starfront.game.TargetMode
@@ -211,7 +212,7 @@ class GameView(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         bg.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF04050D.toInt(), 0xFF0D0820.toInt(), Shader.TileMode.CLAMP)
         val oldFit = fitScale
-        fitScale = (h - hudH) / (ROWS + 1.3f)
+        fitScale = (h - hudH) / (ROWS + 1.5f)
         scale = if (oldw == 0) fitScale else scale * fitScale / oldFit
         if (oldw == 0) resetCamera() else clampCamera()
     }
@@ -229,7 +230,7 @@ class GameView(
         val right = worldRight
         camX = if (right - left <= viewW) right - viewW else camX.coerceIn(left, right - viewW)
         val top = -0.65f
-        val bottom = ROWS + 0.65f + if (selected) panelH / scale else 0f
+        val bottom = ROWS + 0.85f + if (selected) panelH / scale else 0f
         camY = if (bottom - top <= viewH) top - (viewH - (bottom - top)) / 2f else camY.coerceIn(top, bottom - viewH)
     }
 
@@ -449,6 +450,7 @@ class GameView(
         c.drawPath(path, stroke)
         stroke.pathEffect = null
 
+        for (sec in world.sections) if (sec.endCol >= c0 && sec.startCol <= c1) drawPowerBolt(c, sec, time)
         drawGate(c, world.minCol - 1f, world.frontier.entryRow + 0.5f, time)
         drawCore(c, world.coreCol + 0.5f, world.coreRow + 0.5f, time)
 
@@ -572,11 +574,57 @@ class GameView(
         }
     }
 
+    /**
+     * Lightning bolt along the bottom edge of a sector: its length is the power still free
+     * there, over a dim track showing the full budget.
+     */
+    private fun drawPowerBolt(c: Canvas, sec: Section, time: Float) {
+        val left = game.powerLeft(sec.index)
+        val frac = (left.toFloat() / sec.power).coerceIn(0f, 1f)
+        val x0 = sec.startCol + 0.35f
+        val full = sec.width - 2.6f
+        val y = ROWS + 0.32f
+        val col = when {
+            frac > 0.5f -> 0xFF40C4FF.toInt()
+            frac > 0.2f -> 0xFFFFD740.toInt()
+            else -> 0xFFFF5252.toInt()
+        }
+        stroke.color = 0xFF1A2740.toInt()
+        stroke.strokeWidth = 0.14f * scale
+        c.drawLine(sx(x0), sy(y), sx(x0 + full), sy(y), stroke)
+        if (frac > 0f) {
+            val x1 = x0 + full * frac
+            val steps = max(2, ((x1 - x0) / 0.3f).toInt())
+            path.reset()
+            path.moveTo(sx(x0), sy(y))
+            for (i in 1..steps) {
+                val wx = x0 + (x1 - x0) * i / steps
+                val jag = if (i == steps) 0f else (rng.nextFloat() - 0.5f) * 0.28f
+                path.lineTo(sx(wx), sy(y + jag))
+            }
+            stroke.color = col
+            stroke.alpha = (90 + 40 * sin(time * 10f)).toInt()
+            stroke.strokeWidth = 0.16f * scale
+            c.drawPath(path, stroke)
+            stroke.alpha = 255
+            stroke.strokeWidth = 0.045f * scale
+            stroke.color = Color.WHITE
+            c.drawPath(path, stroke)
+            // Spark at the tip
+            fill.color = col
+            c.drawCircle(sx(x1), sy(y), scale * (0.07f + 0.03f * sin(time * 17f)), fill)
+        }
+        text.textAlign = Paint.Align.LEFT
+        text.textSize = 11 * d
+        text.color = if (left > 0) col else 0xFFFF5252.toInt()
+        c.drawText(if (left > 0) "PWR $left/${sec.power}" else "NO POWER", sx(x0 + full) + 6 * d, sy(y) + 4 * d, text)
+    }
+
     private fun hint(c: Canvas, msg: String) {
         text.textAlign = Paint.Align.CENTER
         text.textSize = 12 * d
         text.color = 0xCCB0BEC5.toInt()
-        val y = height - 18 * d
+        val y = hudH + 96 * d
         val tw = text.measureText(msg)
         rect.set(width / 2f - tw / 2 - 12 * d, y - 18 * d, width / 2f + tw / 2 + 12 * d, y + 8 * d)
         fill.color = 0xCC0A0F1C.toInt()
@@ -988,15 +1036,17 @@ class GameView(
             val cw = min(190 * d, (r - l - pad * (types.size - 1)) / types.size)
             var x = l
             for (type in types) {
-                val ok = game.credits >= type.cost
+                val powered = game.hasPowerFor(type, selCol)
+                val ok = game.credits >= type.cost && powered
                 card(c, x, ct, x + cw, cb, if (ok) type.color else 0xFF37474F.toInt(), ok) {
                     if (game.build(type, selCol, selRow) != null) performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                 }
                 drawTower(c, type, 1, x + 28 * d, ct + 30 * d, 44 * d, -0.6f, game.clock, 10f)
                 cardText(c, x + 58 * d, ct + 22 * d, type.title.uppercase(), 11f, Color.WHITE, x + cw - 6 * d)
                 cardText(c, x + 58 * d, ct + 40 * d, type.blurb, 10f, 0xFF90A4AE.toInt(), x + cw - 6 * d)
-                cardText(c, x + 10 * d, cb - 12 * d, "${type.cost}", 15f, if (ok) 0xFFFFD740.toInt() else 0xFFFF5252.toInt(), x + cw)
-                cardText(c, x + cw * 0.45f, cb - 12 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
+                cardText(c, x + 10 * d, cb - 12 * d, "${type.cost}", 15f, if (game.credits >= type.cost) 0xFFFFD740.toInt() else 0xFFFF5252.toInt(), x + cw)
+                cardText(c, x + cw * 0.42f, cb - 12 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
+                cardText(c, x + cw * 0.7f, cb - 12 * d, "P${type.power}", 10f, if (powered) 0xFF40C4FF.toInt() else 0xFFFF5252.toInt(), x + cw)
                 x += cw + pad
             }
             return
@@ -1050,14 +1100,15 @@ class GameView(
 
         for (type in others) {
             val cost = game.replaceCost(tower, type)
-            val ok = game.credits >= cost
+            val powered = game.hasPowerToReplace(tower, type)
+            val ok = game.credits >= cost && powered
             card(c, x, ct, x + unit, cb, if (ok) type.color else 0xFF37474F.toInt(), ok) {
                 if (game.replace(tower, type) != null) performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             }
             drawTower(c, type, 1, x + unit / 2, ct + 26 * d, 34 * d, -0.6f, game.clock, 10f)
-            centerText(c, x + unit / 2, ct + 58 * d, "SWAP", 9f, 0xFF90A4AE.toInt())
+            centerText(c, x + unit / 2, ct + 58 * d, if (powered) "SWAP P${type.power}" else "NO PWR", 9f, if (powered) 0xFF90A4AE.toInt() else 0xFFFF5252.toInt())
             val label = if (cost >= 0) "$cost" else "+${-cost}"
-            centerText(c, x + unit / 2, cb - 10 * d, label, 13f, if (ok) 0xFFFFD740.toInt() else 0xFFFF5252.toInt())
+            centerText(c, x + unit / 2, cb - 10 * d, label, 13f, if (game.credits >= cost) 0xFFFFD740.toInt() else 0xFFFF5252.toInt())
             x += unit + gap
         }
     }

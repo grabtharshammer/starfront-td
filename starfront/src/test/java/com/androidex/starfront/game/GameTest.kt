@@ -134,6 +134,28 @@ class GameTest {
     }
 
     @Test
+    fun sectorPowerLimitsTowers() {
+        val g = Game(8)
+        g.credits = 100_000
+        val cells = buildableCells(g)
+        var built = 0
+        for (c in cells) if (g.build(TowerType.RAIL, c.col, c.row) != null) built++
+        assertEquals(FIRST_SECTION_POWER / TowerType.RAIL.power, built)
+        assertEquals(FIRST_SECTION_POWER % TowerType.RAIL.power, g.powerLeft(0))
+        val free = cells.first { g.canBuild(it.col, it.row) }
+        assertNull(g.build(TowerType.RAIL, free.col, free.row))
+        // Selling frees power; swapping counts the old tower's power as freed.
+        val t = g.towers.first()
+        val swapped = g.replace(t, TowerType.TESLA)!!
+        assertEquals(TowerType.TESLA, g.towerAt(t.col, t.row)!!.type)
+        g.sell(swapped)
+        assertNotNull(g.build(TowerType.RAIL, free.col, free.row))
+        // A new sector brings its own budget.
+        g.world.addSection()
+        assertEquals(SECTION_POWER, g.powerLeft(1))
+    }
+
+    @Test
     fun pathsWander() {
         // Most sectors should double back on themselves, not just run straight west.
         var backtracking = 0
@@ -199,12 +221,14 @@ class GameTest {
             var spent = true
             while (spent) {
                 spent = false
-                // Spend: alternate new towers by the path with upgrading the cheapest-to-upgrade tower.
+                // Spend: alternate new towers by the path (where there's power) with upgrading
+                // the cheapest-to-upgrade tower.
                 val type = types[(g.towers.size * 7 + g.wave) % types.size]
                 if (g.towers.size < 3 + g.wave && g.credits >= type.cost) {
-                    val cell = buildableCells(g).maxByOrNull { nearPath(g, it) }
+                    val cell = buildableCells(g).filter { g.hasPowerFor(type, it.col) }.maxByOrNull { nearPath(g, it) }
                     if (cell != null && g.build(type, cell.col, cell.row) != null) spent = true
-                } else {
+                }
+                if (!spent) {
                     val t = g.towers.filter { it.upgradeCost != null }.minByOrNull { it.upgradeCost!! }
                     if (t != null && g.upgrade(t)) spent = true
                 }

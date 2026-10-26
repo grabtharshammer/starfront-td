@@ -16,6 +16,8 @@ const val START_LIVES = 20
 const val SECTOR_STRENGTH = 0.15f
 /** Barrier gained at each sector seam, as a fraction of max HP. */
 const val SEAM_BARRIER = 0.3f
+/** Overall enemy toughness. */
+const val HP_BASE = 1.6f
 const val BARRIER_COLOR = 0xFFFFE57F.toInt()
 
 enum class Phase { BUILD, WAVE, GAME_OVER }
@@ -72,8 +74,19 @@ class Game(val seed: Long = Random.nextLong()) {
     fun canBuild(col: Int, row: Int) =
         phase != Phase.GAME_OVER && world.inBounds(col, row) && !world.isPath(col, row) && towerAt(col, row) == null
 
+    /** Power still free in the sector with index [section]. */
+    fun powerLeft(section: Int): Int {
+        val budget = world.sections.getOrNull(section)?.power ?: return 0
+        return budget - towers.sumOf { if (World.sectionIndexAt(it.col) == section) it.type.power else 0 }
+    }
+
+    fun hasPowerFor(type: TowerType, col: Int) = powerLeft(World.sectionIndexAt(col)) >= type.power
+
+    /** Whether [t] could be swapped for [type] power-wise (its own power is freed first). */
+    fun hasPowerToReplace(t: Tower, type: TowerType) = powerLeft(World.sectionIndexAt(t.col)) + t.type.power >= type.power
+
     fun build(type: TowerType, col: Int, row: Int): Tower? {
-        if (!canBuild(col, row) || credits < type.cost) return null
+        if (!canBuild(col, row) || credits < type.cost || !hasPowerFor(type, col)) return null
         credits -= type.cost
         return place(Tower(type, col, row))
     }
@@ -99,7 +112,7 @@ class Game(val seed: Long = Random.nextLong()) {
 
     /** Swaps [t] for a fresh level-1 tower of [type], refunding the old one. */
     fun replace(t: Tower, type: TowerType): Tower? {
-        if (type == t.type || credits < replaceCost(t, type) || phase == Phase.GAME_OVER) return null
+        if (type == t.type || credits < replaceCost(t, type) || !hasPowerToReplace(t, type) || phase == Phase.GAME_OVER) return null
         sell(t)
         floaters.removeAt(floaters.size - 1)
         credits -= type.cost
@@ -419,7 +432,7 @@ class Game(val seed: Long = Random.nextLong()) {
         fun hpScale(wave: Int): Float {
             // Exponential: the path and the tower count grow every wave, so linear growth would stall.
             val n = (wave - 1).toFloat()
-            return (1f + 0.1f * n) * 1.15f.pow(n)
+            return HP_BASE * (1f + 0.1f * n) * 1.17f.pow(n)
         }
 
         fun composeWave(n: Int): List<Spawn> {

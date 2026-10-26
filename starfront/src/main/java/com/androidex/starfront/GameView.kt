@@ -17,8 +17,11 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowInsets
+import com.androidex.starfront.audio.Play
+import com.androidex.starfront.audio.Spatializer
 import com.androidex.starfront.game.BARRIER_COLOR
 import com.androidex.starfront.game.Enemy
+import com.androidex.starfront.game.Sfx
 import com.androidex.starfront.game.EnemyType
 import com.androidex.starfront.game.FxKind
 import com.androidex.starfront.game.Game
@@ -57,7 +60,13 @@ class GameView(
         fun onSave(state: String?)
         fun onGameOver(wave: Int)
         fun bestWave(): Int
+        fun onMuteChanged(muted: Boolean)
     }
+
+    /** Receives the sounds to play each frame; null in headless use. */
+    var soundSink: ((Play) -> Unit)? = null
+    var muted = false
+    private val spatializer = Spatializer()
 
     private val d = resources.displayMetrics.density
     private val hudH = 54 * d
@@ -276,6 +285,8 @@ class GameView(
                 if (b.enabled) {
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     b.action()
+                } else {
+                    game.sound(Sfx.DENIED)
                 }
                 return
             }
@@ -359,6 +370,18 @@ class GameView(
             clampCamera()
         }
         bannerTime += dt
+        playSounds()
+    }
+
+    /** Plays this frame's sounds from what's on screen: off-screen sources stay silent. */
+    private fun playSounds() {
+        if (game.sounds.isEmpty()) return
+        val sink = soundSink
+        if (sink != null && !muted && width > 0) {
+            val plays = spatializer.mix(game.sounds, camX, camY, camX + viewW, camY + viewH, System.nanoTime() / 1e9)
+            for (p in plays) sink(p)
+        }
+        game.sounds.clear()
     }
 
     private fun launch() {
@@ -944,6 +967,14 @@ class GameView(
             c.drawText("HOSTILES ${game.enemiesRemaining}", rect.centerX(), rect.centerY() + 4 * d, text)
         }
         rx -= launchW + 6 * d
+
+        // Sound toggle
+        val sndW = 52 * d
+        hudButton(c, rx - sndW, by, rx, by + bh, if (muted) "OFF" else "SFX", !muted) {
+            muted = !muted
+            listener.onMuteChanged(muted)
+        }
+        rx -= sndW + 6 * d
 
         // Auto-launch toggle
         val autoW = 52 * d

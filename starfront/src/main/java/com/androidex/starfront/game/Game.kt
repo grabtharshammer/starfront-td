@@ -41,6 +41,8 @@ class Game(val seed: Long = Random.nextLong()) {
     val particles = ArrayList<Particle>()
     val floaters = ArrayList<Floater>()
     val events = ArrayDeque<GameEvent>()
+    /** Sounds requested since the view last drained them (capped so headless runs don't pile up). */
+    val sounds = ArrayList<SoundEvent>()
 
     var credits = START_CREDITS
     var lives = START_LIVES
@@ -88,6 +90,7 @@ class Game(val seed: Long = Random.nextLong()) {
     fun build(type: TowerType, col: Int, row: Int): Tower? {
         if (!canBuild(col, row) || credits < type.cost || !hasPowerFor(type, col)) return null
         credits -= type.cost
+        sound(Sfx.BUILD)
         return place(Tower(type, col, row))
     }
 
@@ -97,6 +100,7 @@ class Game(val seed: Long = Random.nextLong()) {
         credits -= cost
         t.invested += cost
         t.level++
+        sound(Sfx.UPGRADE)
         effects.add(Fx(FxKind.RING, t.x, t.y, t.type.color, 0.5f, size = 0.8f))
         return true
     }
@@ -105,6 +109,7 @@ class Game(val seed: Long = Random.nextLong()) {
         if (phase == Phase.GAME_OVER || towerIndex.remove(World.key(t.col, t.row)) == null) return
         towers.remove(t)
         credits += t.sellValue
+        sound(Sfx.SELL)
         floaters.add(Floater("+${t.sellValue}", t.x, t.y, 0xFFFFD740.toInt()))
     }
 
@@ -115,7 +120,9 @@ class Game(val seed: Long = Random.nextLong()) {
         if (type == t.type || credits < replaceCost(t, type) || !hasPowerToReplace(t, type) || phase == Phase.GAME_OVER) return null
         sell(t)
         floaters.removeAt(floaters.size - 1)
+        sounds.removeAll { it.sfx == Sfx.SELL }
         credits -= type.cost
+        sound(Sfx.BUILD)
         return place(Tower(type, t.col, t.row))
     }
 
@@ -137,6 +144,11 @@ class Game(val seed: Long = Random.nextLong()) {
         spawnQueue.clear()
         spawnQueue.addAll(composeWave(wave))
         waveSize = spawnQueue.size
+        sound(Sfx.WAVE_START)
+    }
+
+    fun sound(sfx: Sfx, x: Float = Float.NaN, y: Float = Float.NaN) {
+        if (sounds.size < 64) sounds.add(SoundEvent(sfx, x, y))
     }
 
     fun update(dt: Float) {
@@ -172,10 +184,12 @@ class Game(val seed: Long = Random.nextLong()) {
             val s = world.addSection()
             events.add(GameEvent.Message("WAVE $wave CLEARED  +$bonus  ·  SECTOR ${s.index + 1} ONLINE"))
             events.add(GameEvent.Expanded(s))
+            sound(Sfx.SECTOR_OPEN)
         } else {
             val left = nextExpansionWave - wave
             events.add(GameEvent.Message("WAVE $wave CLEARED  +$bonus  ·  NEW SECTOR IN $left"))
             events.add(GameEvent.Cleared)
+            sound(Sfx.WAVE_CLEAR)
         }
     }
 
@@ -196,10 +210,12 @@ class Game(val seed: Long = Random.nextLong()) {
                 e.alive = false
                 lives = max(0, lives - e.type.coreDamage)
                 effects.add(Fx(FxKind.CORE_HIT, world.coreCol + 0.5f, world.coreRow + 0.5f, e.type.color, 0.6f))
+                sound(Sfx.CORE_HIT, world.coreCol + 0.5f, world.coreRow + 0.5f)
                 if (lives == 0 && phase != Phase.GAME_OVER) {
                     phase = Phase.GAME_OVER
                     spawnQueue.clear()
                     events.add(GameEvent.GameOver(wave))
+                    sound(Sfx.GAME_OVER)
                 }
                 continue
             }
@@ -210,6 +226,7 @@ class Game(val seed: Long = Random.nextLong()) {
                 // Crossed a seam heading east: pick up a barrier.
                 e.sector = sector
                 e.addBarrier(e.maxHp * SEAM_BARRIER)
+                sound(Sfx.BARRIER, e.x, e.y)
                 effects.add(Fx(FxKind.RING, e.x, e.y, BARRIER_COLOR, 0.5f, size = e.radius * 3f))
             }
         }
@@ -227,9 +244,16 @@ class Game(val seed: Long = Random.nextLong()) {
             val mx = t.x + cos(t.angle) * 0.35f
             val my = t.y + sin(t.angle) * 0.35f
             when (t.type) {
-                TowerType.PULSE -> projectiles.add(Projectile(ShotKind.BOLT, mx, my, target, 12f, t.damage, 0f, t.type.color))
-                TowerType.PLASMA -> projectiles.add(Projectile(ShotKind.ORB, mx, my, target, 5.5f, t.damage, t.splash, t.type.color))
+                TowerType.PULSE -> {
+                    projectiles.add(Projectile(ShotKind.BOLT, mx, my, target, 12f, t.damage, 0f, t.type.color))
+                    sound(Sfx.PULSE, t.x, t.y)
+                }
+                TowerType.PLASMA -> {
+                    projectiles.add(Projectile(ShotKind.ORB, mx, my, target, 5.5f, t.damage, t.splash, t.type.color))
+                    sound(Sfx.PLASMA, t.x, t.y)
+                }
                 TowerType.CRYO -> {
+                    sound(Sfx.CRYO, t.x, t.y)
                     val r2 = t.range * t.range
                     for (e in enemies) {
                         if (!e.alive || sq(e.x - t.x) + sq(e.y - t.y) > r2) continue
@@ -238,8 +262,14 @@ class Game(val seed: Long = Random.nextLong()) {
                     }
                     effects.add(Fx(FxKind.RING, t.x, t.y, t.type.color, 0.45f, size = t.range))
                 }
-                TowerType.TESLA -> chain(t, target)
-                TowerType.RAIL -> rail(t)
+                TowerType.TESLA -> {
+                    chain(t, target)
+                    sound(Sfx.TESLA, t.x, t.y)
+                }
+                TowerType.RAIL -> {
+                    rail(t)
+                    sound(Sfx.RAIL, t.x, t.y)
+                }
             }
         }
     }
@@ -339,6 +369,7 @@ class Game(val seed: Long = Random.nextLong()) {
                     if (e.alive && sq(e.x - p.x) + sq(e.y - p.y) <= r2) damage(e, p.damage, false, null)
                 }
                 effects.add(Fx(FxKind.BLAST, p.x, p.y, p.color, 0.35f, size = p.splash))
+                sound(Sfx.IMPACT, p.x, p.y)
             }
         }
     }
@@ -350,6 +381,7 @@ class Game(val seed: Long = Random.nextLong()) {
         credits += bounty
         floaters.add(Floater("+$bounty", e.x, e.y - 0.2f, 0xFFFFD740.toInt()))
         val n = if (e.type == EnemyType.BOSS) 40 else 10
+        sound(if (e.type == EnemyType.BOSS) Sfx.EXPLODE_BIG else Sfx.EXPLODE, e.x, e.y)
         repeat(n) {
             val a = rng.nextFloat() * 6.2832f
             val s = 0.6f + rng.nextFloat() * 2.2f

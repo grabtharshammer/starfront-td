@@ -17,6 +17,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowInsets
+import com.androidex.starfront.game.BARRIER_COLOR
 import com.androidex.starfront.game.Enemy
 import com.androidex.starfront.game.EnemyType
 import com.androidex.starfront.game.FxKind
@@ -790,7 +791,16 @@ class GameView(
             c.drawCircle(x, y, r * 1.45f, stroke)
             stroke.alpha = 255
         }
-        if (e.hp < e.maxHp || e.shield < e.maxShield) {
+        if (e.barrier > 0.5f) {
+            // Seam barrier: a gold hexagon that thickens with its strength.
+            stroke.color = BARRIER_COLOR
+            stroke.alpha = 220
+            stroke.strokeWidth = r * (0.08f + 0.12f * (e.barrier / e.maxHp).coerceAtMost(1f))
+            polygon(x, y, r * 1.7f, 6, time * 1.5f)
+            c.drawPath(path, stroke)
+            stroke.alpha = 255
+        }
+        if (e.hp < e.maxHp || e.shield < e.maxShield || e.barrier < e.maxBarrier) {
             val bw = if (e.type == EnemyType.BOSS) scale * 1.1f else scale * 0.55f
             val by = y - r - scale * 0.2f
             fill.color = 0xCC000000.toInt()
@@ -801,6 +811,10 @@ class GameView(
             if (e.maxShield > 0f) {
                 fill.color = 0xFF18FFFF.toInt()
                 c.drawRect(x - bw / 2, by - 3 * d, x - bw / 2 + bw * (e.shield / e.maxShield), by - 1 * d, fill)
+            }
+            if (e.barrier > 0f) {
+                fill.color = BARRIER_COLOR
+                c.drawRect(x - bw / 2, by + 5 * d, x - bw / 2 + bw * (e.barrier / e.maxBarrier), by + 7 * d, fill)
             }
         }
     }

@@ -2,6 +2,7 @@ package com.androidex.starfront.game
 
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.pow
@@ -11,6 +12,11 @@ import kotlin.random.Random
 
 const val START_CREDITS = 220
 const val START_LIVES = 20
+/** Extra HP and shields per sector opened. */
+const val SECTOR_STRENGTH = 0.15f
+/** Barrier gained at each sector seam, as a fraction of max HP. */
+const val SEAM_BARRIER = 0.3f
+const val BARRIER_COLOR = 0xFFFFE57F.toInt()
 
 enum class Phase { BUILD, WAVE, GAME_OVER }
 
@@ -135,7 +141,9 @@ class Game(val seed: Long = Random.nextLong()) {
     }
 
     private fun spawn(type: EnemyType) {
-        val e = Enemy(type, hpScale(wave))
+        val strength = hpScale(wave) * sectorScale(world.sections.size)
+        val e = Enemy(type, strength)
+        e.sector = world.frontier.index
         world.positionAt(0f, tmp)
         e.x = tmp[0]; e.y = tmp[1]; e.heading = tmp[2]
         enemies.add(e)
@@ -184,6 +192,13 @@ class Game(val seed: Long = Random.nextLong()) {
             }
             world.positionAt(e.dist, tmp)
             e.x = tmp[0]; e.y = tmp[1]; e.heading = tmp[2]
+            val sector = World.sectionIndexAt(floor(e.x).toInt())
+            if (sector < e.sector) {
+                // Crossed a seam heading east: pick up a barrier.
+                e.sector = sector
+                e.addBarrier(e.maxHp * SEAM_BARRIER)
+                effects.add(Fx(FxKind.RING, e.x, e.y, BARRIER_COLOR, 0.5f, size = e.radius * 3f))
+            }
         }
     }
 
@@ -226,7 +241,7 @@ class Game(val seed: Long = Random.nextLong()) {
             if (d2 > r2) continue
             val score = when (t.mode) {
                 TargetMode.FIRST -> e.dist
-                TargetMode.STRONG -> e.hp + e.shield
+                TargetMode.STRONG -> e.hp + e.shield + e.barrier
                 TargetMode.CLOSE -> -d2
             }
             if (best == null || score > bestScore) {
@@ -398,10 +413,13 @@ class Game(val seed: Long = Random.nextLong()) {
             null
         }
 
+        /** Each sector opened makes every enemy this much tougher. */
+        fun sectorScale(sections: Int) = 1f + SECTOR_STRENGTH * (sections - 1)
+
         fun hpScale(wave: Int): Float {
             // Exponential: the path and the tower count grow every wave, so linear growth would stall.
             val n = (wave - 1).toFloat()
-            return (1f + 0.1f * n) * 1.12f.pow(n)
+            return (1f + 0.1f * n) * 1.15f.pow(n)
         }
 
         fun composeWave(n: Int): List<Spawn> {

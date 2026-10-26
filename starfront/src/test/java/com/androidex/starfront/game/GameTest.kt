@@ -99,6 +99,41 @@ class GameTest {
     }
 
     @Test
+    fun enemiesGainBarrierCrossingSeams() {
+        val g = Game(21)
+        repeat(2) { g.world.addSection() }
+        // Wave 1 with no towers: every enemy walks the whole route.
+        g.startWave()
+        var maxBarrier = 0f
+        while (g.phase == Phase.WAVE) {
+            g.update(1f / 30)
+            for (e in g.enemies) {
+                val expected = (g.world.frontier.index - e.sector) * e.maxHp * SEAM_BARRIER
+                assertEquals(expected, e.barrier, 1e-3f)
+                maxBarrier = maxOf(maxBarrier, e.barrier / e.maxHp)
+            }
+        }
+        assertEquals(2 * SEAM_BARRIER, maxBarrier, 1e-4f)
+
+        // Barrier soaks damage before HP.
+        val e = Enemy(EnemyType.GRUNT, 1f)
+        e.addBarrier(10f)
+        e.hit(15f)
+        assertEquals(0f, e.barrier, 0f)
+        assertEquals(e.maxHp - 5f, e.hp, 1e-4f)
+    }
+
+    @Test
+    fun sectorsMakeEnemiesStronger() {
+        assertEquals(1f, Game.sectorScale(1), 0f)
+        assertTrue(Game.sectorScale(4) > Game.sectorScale(2))
+        assertEquals(1, World.sectionIndexAt(-1))
+        assertEquals(1, World.sectionIndexAt(-SECTION_COLS))
+        assertEquals(2, World.sectionIndexAt(-SECTION_COLS - 1))
+        assertEquals(0, World.sectionIndexAt(FIRST_SECTION_COLS - 1))
+    }
+
+    @Test
     fun pathsWander() {
         // Most sectors should double back on themselves, not just run straight west.
         var backtracking = 0

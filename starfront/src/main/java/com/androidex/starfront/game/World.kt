@@ -133,6 +133,9 @@ class World(val seed: Long) {
     }
 
     companion object {
+        /** Section index for a column (section 0 starts at column 0; later ones extend west). */
+        fun sectionIndexAt(col: Int) = if (col >= 0) 0 else 1 + (-col - 1) / SECTION_COLS
+
         fun key(col: Int, row: Int): Long = (col.toLong() shl 32) or (row.toLong() and 0xffffffffL)
 
         /**

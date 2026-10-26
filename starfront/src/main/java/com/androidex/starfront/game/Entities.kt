@@ -72,10 +72,10 @@ enum class EnemyType(
     BOSS("Dreadnought", 700f, 0.55f, 7f, 140f, 120, 8, 0.55f, 0xFFD500F9.toInt()),
 }
 
-class Enemy(val type: EnemyType, scale: Float) {
+class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
     val maxHp = type.hp * scale
     var hp = maxHp
-    val maxShield = type.shield * scale
+    val maxShield = type.shield * shieldScale
     var shield = maxShield
     var shieldDelay = 0f
     var dist = 0f
@@ -87,13 +87,29 @@ class Enemy(val type: EnemyType, scale: Float) {
     var alive = true
     /** Seconds since the last hit, for a short flash. */
     var sinceHit = 10f
+    /** Index of the sector the enemy is in; it gains a barrier each time this drops. */
+    var sector = 0
+    /** Non-regenerating shield picked up at sector seams. Absorbs damage before anything else. */
+    var barrier = 0f
+    var maxBarrier = 0f
     val radius get() = type.radius
 
-    /** Applies damage after shield and armor. Returns true if this hit killed it. */
+    fun addBarrier(amount: Float) {
+        barrier += amount
+        maxBarrier = max(maxBarrier, barrier)
+    }
+
+    /** Applies damage after barrier, shield and armor. Returns true if this hit killed it. */
     fun hit(amount: Float, pierceArmor: Boolean = false): Boolean {
         if (!alive) return false
         var dmg = amount
         sinceHit = 0f
+        if (barrier > 0f) {
+            val absorbed = minOf(barrier, dmg)
+            barrier -= absorbed
+            dmg -= absorbed
+            if (dmg <= 0f) return false
+        }
         if (maxShield > 0f) {
             shieldDelay = 2.5f
             if (shield > 0f) {

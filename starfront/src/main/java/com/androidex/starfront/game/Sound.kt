@@ -14,6 +14,7 @@ enum class Sfx(val volume: Float) {
     CORE_HIT(0.9f),
     BUILD(0.6f),
     UPGRADE(0.6f),
+    EFFICIENCY(0.75f),
     SELL(0.55f),
     DENIED(0.5f),
     WAVE_START(0.7f),

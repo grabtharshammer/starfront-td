@@ -181,16 +181,16 @@ class GameTest {
     }
 
     @Test
-    fun onlyUpgradedPulseAndRailHitAir() {
+    fun airIsHitByCryoAndUpgradedPulseAndRail() {
         val g = Game(2)
         val ship = Enemy(EnemyType.GUNSHIP, 1f)
         val crawler = Enemy(EnemyType.GRUNT, 1f)
         for (type in TowerType.entries) {
             val t = Tower(type, 0, 0)
             assertTrue(g.canHit(t, crawler))
-            assertFalse("$type L1", g.canHit(t, ship))
+            assertEquals("$type L1", type == TowerType.CRYO, g.canHit(t, ship))
             t.level = AIR_LEVEL
-            assertEquals("$type L$AIR_LEVEL", type == TowerType.PULSE || type == TowerType.RAIL, g.canHit(t, ship))
+            assertEquals("$type L$AIR_LEVEL", type != TowerType.PLASMA && type != TowerType.TESLA, g.canHit(t, ship))
         }
     }
 
@@ -223,6 +223,51 @@ class GameTest {
             val big = g.enemies.filter { it.alive && !it.type.air && it.radius >= QUEUE_RADIUS && it.dist > 1f }.sortedBy { it.dist }
             for ((a, b) in big.zipWithNext()) assertTrue("${a.type} and ${b.type} overlap", b.dist - a.dist >= (a.radius + b.radius) * 1.05f)
         } }
+    }
+
+    @Test
+    fun cryoSlowsGunships() {
+        val g = Game(14)
+        g.lives = 1000
+        repeat(WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30) }
+        // Cryo on every free tile of the core sector: any gunship crossing it gets slowed.
+        g.credits = 100_000
+        for (c in buildableCells(g).filter { it.col >= 0 }) g.build(TowerType.CRYO, c.col, c.row)
+        g.startWave()
+        var slowed = false
+        while (g.phase == Phase.WAVE) {
+            g.update(1f / 30)
+            if (g.enemies.any { it.type.air && it.slowTimer > 0f }) slowed = true
+        }
+        assertTrue(slowed)
+    }
+
+    @Test
+    fun fullyUpgradedSectorGainsPowerEfficiency() {
+        val g = Game(19)
+        g.credits = 1_000_000
+        val cells = buildableCells(g).filter { it.col >= 0 }
+        // Fill the core sector's base budget with railguns (3 each) and pulses (1).
+        for (c in cells) if (g.build(TowerType.RAIL, c.col, c.row) == null) break
+        for (c in cells) if (g.powerLeft(0) > 0) g.build(TowerType.PULSE, c.col, c.row)
+        assertEquals(0, g.powerLeft(0))
+        // Full but not maxed: no bonus.
+        assertFalse(g.world.sections[0].efficient)
+        val towers = g.towers.toList()
+        for (t in towers.dropLast(1)) repeat(MAX_LEVEL) { g.upgrade(t) }
+        assertFalse(g.world.sections[0].efficient)
+        repeat(MAX_LEVEL) { g.upgrade(towers.last()) }
+        assertTrue(g.world.sections[0].efficient)
+        assertEquals(EFFICIENCY_BONUS, g.powerLeft(0))
+        assertTrue(g.events.any { it is GameEvent.Message && it.text.contains("EFFICIENCY") })
+        // The bonus can be spent on fresh towers without losing it.
+        val free = cells.first { g.canBuild(it.col, it.row) }
+        assertNotNull(g.build(TowerType.PULSE, free.col, free.row))
+        assertTrue(g.world.sections[0].efficient)
+        // And it survives a save.
+        val r = Game.restore(g.saveState()!!)!!
+        assertTrue(r.world.sections[0].efficient)
+        assertEquals(g.powerLeft(0), r.powerLeft(0))
     }
 
     @Test

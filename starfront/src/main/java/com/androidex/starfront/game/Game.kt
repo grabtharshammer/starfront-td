@@ -84,7 +84,26 @@ class Game(val seed: Long = Random.nextLong()) {
     /** Power still free in the sector with index [section]. */
     fun powerLeft(section: Int): Int {
         val budget = world.sections.getOrNull(section)?.power ?: return 0
-        return budget - towers.sumOf { if (World.sectionIndexAt(it.col) == section) it.type.power else 0 }
+        return budget - powerUsed(section)
+    }
+
+    private fun powerUsed(section: Int) = towers.sumOf { if (World.sectionIndexAt(it.col) == section) it.type.power else 0 }
+
+    /** Whether a sector qualifies for the efficiency bonus: base power all used, every tower maxed. */
+    fun isFullyUpgraded(section: Int): Boolean {
+        val s = world.sections.getOrNull(section) ?: return false
+        val inSector = towers.filter { World.sectionIndexAt(it.col) == section }
+        return inSector.isNotEmpty() && powerUsed(section) >= s.basePower && inSector.all { it.level >= MAX_LEVEL }
+    }
+
+    private fun checkEfficiency(col: Int) {
+        val index = World.sectionIndexAt(col)
+        val s = world.sections.getOrNull(index) ?: return
+        if (s.efficient || !isFullyUpgraded(index)) return
+        s.efficient = true
+        events.add(GameEvent.Message("SECTOR ${index + 1} POWER EFFICIENCY  ·  +$EFFICIENCY_BONUS PWR"))
+        sound(Sfx.EFFICIENCY)
+        effects.add(Fx(FxKind.RING, s.startCol + s.width / 2f, ROWS + 0.3f, BARRIER_COLOR, 0.8f, size = s.width / 2f))
     }
 
     fun hasPowerFor(type: TowerType, col: Int) = powerLeft(World.sectionIndexAt(col)) >= type.power
@@ -96,7 +115,7 @@ class Game(val seed: Long = Random.nextLong()) {
         if (!canBuild(col, row) || credits < type.cost || !hasPowerFor(type, col)) return null
         credits -= type.cost
         sound(Sfx.BUILD)
-        return place(Tower(type, col, row))
+        return place(Tower(type, col, row)).also { checkEfficiency(col) }
     }
 
     fun upgrade(t: Tower): Boolean {
@@ -106,6 +125,7 @@ class Game(val seed: Long = Random.nextLong()) {
         t.invested += cost
         t.level++
         sound(Sfx.UPGRADE)
+        checkEfficiency(t.col)
         effects.add(Fx(FxKind.RING, t.x, t.y, t.type.color, 0.5f, size = 0.8f))
         return true
     }
@@ -162,8 +182,8 @@ class Game(val seed: Long = Random.nextLong()) {
     }
 
     /** Whether [t] is able to shoot [e] at all (air units need a level-3 pulse laser or railgun). */
-    fun canHit(t: Tower, e: Enemy) =
-        !e.type.air || (t.level >= AIR_LEVEL && (t.type == TowerType.PULSE || t.type == TowerType.RAIL))
+    fun canHit(t: Tower, e: Enemy) = !e.type.air || t.type == TowerType.CRYO ||
+        (t.level >= AIR_LEVEL && (t.type == TowerType.PULSE || t.type == TowerType.RAIL))
 
     // Straight-line flight from the warp gate to the core, for air units.
     private val airStartX get() = world.minCol - 1.5f
@@ -319,7 +339,7 @@ class Game(val seed: Long = Random.nextLong()) {
                     sound(Sfx.CRYO, t.x, t.y)
                     val r2 = t.range * t.range
                     for (e in enemies) {
-                        if (!e.alive || e.type.air || sq(e.x - t.x) + sq(e.y - t.y) > r2) continue
+                        if (!e.alive || sq(e.x - t.x) + sq(e.y - t.y) > r2) continue
                         e.slow(t.slowFactor, 1.6f)
                         damage(e, t.damage, false, t)
                     }
@@ -488,6 +508,7 @@ class Game(val seed: Long = Random.nextLong()) {
         appendLine("wave=$wave")
         appendLine("credits=$credits")
         appendLine("lives=$lives")
+        appendLine("efficient=${world.sections.filter { it.efficient }.joinToString(",") { it.index.toString() }}")
         for (t in towers) appendLine("tower=${t.type.name},${t.col},${t.row},${t.level},${t.invested},${t.mode.name},${t.kills}")
     }
 
@@ -505,6 +526,7 @@ class Game(val seed: Long = Random.nextLong()) {
             g.wave = values.getValue("wave").toInt()
             g.credits = values.getValue("credits").toInt()
             g.lives = values.getValue("lives").toInt()
+            values["efficient"]?.split(',')?.filter { it.isNotBlank() }?.forEach { g.world.sections[it.toInt()].efficient = true }
             for (line in lines) {
                 if (!line.startsWith("tower=")) continue
                 val f = line.removePrefix("tower=").split(',')

@@ -21,6 +21,7 @@ import com.androidex.starfront.audio.Play
 import com.androidex.starfront.audio.Spatializer
 import com.androidex.starfront.game.AIR_LEVEL
 import com.androidex.starfront.game.BARRIER_COLOR
+import com.androidex.starfront.game.EFFICIENCY_BONUS
 import com.androidex.starfront.game.Enemy
 import com.androidex.starfront.game.Sfx
 import com.androidex.starfront.game.EnemyType
@@ -644,7 +645,19 @@ class GameView(
         text.textAlign = Paint.Align.LEFT
         text.textSize = 11 * d
         text.color = if (left > 0) col else 0xFFFF5252.toInt()
-        c.drawText(if (left > 0) "PWR $left/${sec.power}" else "NO POWER", sx(x0 + full) + 6 * d, sy(y) + 4 * d, text)
+        val label = if (left > 0) "PWR $left/${sec.power}" else "NO POWER"
+        c.drawText(label, sx(x0 + full) + 6 * d, sy(y) + 4 * d, text)
+        // Second line: the efficiency bonus, earned or how to earn it once the base budget is spent.
+        val note = when {
+            sec.efficient -> "EFFICIENT"
+            left <= 0 -> "MAX ALL +$EFFICIENCY_BONUS"
+            else -> null
+        }
+        if (note != null) {
+            text.color = BARRIER_COLOR
+            text.textSize = 9 * d
+            c.drawText(note, sx(x0 + full) + 6 * d, sy(y) - 9 * d, text)
+        }
     }
 
     private fun hint(c: Canvas, msg: String) {

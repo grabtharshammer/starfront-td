@@ -12,6 +12,8 @@ const val WAVES_PER_SECTOR = 5
 /** Power available for towers in each sector (the core sector is larger). */
 const val FIRST_SECTION_POWER = 12
 const val SECTION_POWER = 10
+/** Extra power a sector earns once it is fully built out and every tower in it is maxed. */
+const val EFFICIENCY_BONUS = 5
 
 data class Cell(val col: Int, val row: Int)
 
@@ -26,7 +28,10 @@ class Section(
     val path: List<Cell>,
 ) {
     val endCol get() = startCol + width
-    val power get() = if (index == 0) FIRST_SECTION_POWER else SECTION_POWER
+    val basePower get() = if (index == 0) FIRST_SECTION_POWER else SECTION_POWER
+    /** Earned once and kept, so spending the bonus on new level-1 towers doesn't revoke it. */
+    var efficient = false
+    val power get() = basePower + if (efficient) EFFICIENCY_BONUS else 0
 }
 
 /**

@@ -57,6 +57,10 @@ object Synth {
         )
         Sfx.BUILD -> notes(0.07f, 660f, 990f)
         Sfx.UPGRADE -> notes(0.07f, 523f, 659f, 784f, 1047f)
+        Sfx.EFFICIENCY -> mix(
+            notes(0.08f, 784f, 988f, 1175f, 1568f),
+            delay(chord(0.9f, 392f, 494f, 587f, 784f) * 0.45f, 0.3f),
+        )
         Sfx.SELL -> notes(0.08f, 880f, 587f)
         Sfx.DENIED -> tone(0.14f, 150f, 130f, Wave.SQUARE, decay = 12f) * 0.5f
         Sfx.WAVE_START -> mix(

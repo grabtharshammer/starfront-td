@@ -18,9 +18,9 @@ android {
     }
 
     signingConfigs {
-        // Same checked-in debug key as the other app so CI builds install over each other.
+        // Checked-in debug key so CI and local builds install over each other.
         getByName("debug") {
-            storeFile = rootProject.file("app/debug.keystore")
+            storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"

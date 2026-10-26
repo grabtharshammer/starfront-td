@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TrailGlance"
-include(":app", ":starfront")
+rootProject.name = "StarfrontTD"
+include(":starfront")

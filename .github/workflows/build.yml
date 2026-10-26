@@ -23,15 +23,8 @@ jobs:
       - name: Test and build
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
 
-      - name: Rename APKs
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TrailGlance-${{ github.run_number }}.apk
-          cp starfront/build/outputs/apk/debug/starfront-debug.apk StarfrontTD-${{ github.run_number }}.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: TrailGlance-${{ github.run_number }}
-          path: TrailGlance-${{ github.run_number }}.apk
+      - name: Rename APK
+        run: cp starfront/build/outputs/apk/debug/starfront-debug.apk StarfrontTD-${{ github.run_number }}.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -44,10 +37,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }} (TrailGlance, Starfront TD)
+          name: Starfront TD build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           body: Built from ${{ github.ref_name }} @ ${{ github.sha }}
-          files: |
-            TrailGlance-${{ github.run_number }}.apk
-            StarfrontTD-${{ github.run_number }}.apk
+          files: StarfrontTD-${{ github.run_number }}.apk
           make_latest: true

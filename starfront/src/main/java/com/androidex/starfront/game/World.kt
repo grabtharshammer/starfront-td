@@ -8,12 +8,6 @@ const val ROWS = 9
 // Widths are odd so the path lattice (see carve) has a node column next to each edge.
 const val FIRST_SECTION_COLS = 15
 const val SECTION_COLS = 13
-const val WAVES_PER_SECTOR = 5
-/** Power available for towers in each sector (the core sector is larger). */
-const val FIRST_SECTION_POWER = 12
-const val SECTION_POWER = 10
-/** Extra power a sector earns once it is fully built out and every tower in it is maxed. */
-const val EFFICIENCY_BONUS = 5
 
 data class Cell(val col: Int, val row: Int)
 
@@ -28,16 +22,16 @@ class Section(
     val path: List<Cell>,
 ) {
     val endCol get() = startCol + width
-    val basePower get() = if (index == 0) FIRST_SECTION_POWER else SECTION_POWER
+    val basePower get() = if (index == 0) Balance.FIRST_SECTION_POWER else Balance.SECTION_POWER
     /** Earned once and kept, so spending the bonus on new level-1 towers doesn't revoke it. */
     var efficient = false
-    val power get() = basePower + if (efficient) EFFICIENCY_BONUS else 0
+    val power get() = basePower + if (efficient) Balance.EFFICIENCY_BONUS else 0
 }
 
 /**
  * The battlefield. It starts as a single section next to the core and grows west by one
- * section after every cleared wave. Enemies always enter at the western edge, so the path
- * gets longer and every tower built so far keeps seeing action.
+ * section every [Balance.WAVES_PER_SECTOR] waves. Enemies always enter at the western edge, so
+ * the path gets longer and every tower built so far keeps seeing action.
  */
 class World(val seed: Long) {
     /** Index 0 is the eastern (core) section; the last one is the current frontier. */
@@ -77,8 +71,6 @@ class World(val seed: Long) {
     fun inBounds(col: Int, row: Int) = col >= minCol && col < coreCol && row >= 0 && row < ROWS
 
     fun isPath(col: Int, row: Int) = key(col, row) in pathKeys
-
-    fun sectionAt(col: Int): Section? = sections.firstOrNull { col >= it.startCol && col < it.endCol }
 
     /** Writes the position at [dist] along the route into [out] (x, y, heading radians). */
     fun positionAt(dist: Float, out: FloatArray) {

@@ -56,7 +56,7 @@ class GameTest {
         val cell = buildableCells(g).first()
         assertFalse(g.canBuild(g.world.sections[0].path[0].col, g.world.sections[0].path[0].row))
         val t = g.build(TowerType.PULSE, cell.col, cell.row)!!
-        assertEquals(START_CREDITS - 50, g.credits)
+        assertEquals(Balance.START_CREDITS - 50, g.credits)
         assertNull(g.build(TowerType.PULSE, cell.col, cell.row))
         assertTrue(g.upgrade(t))
         assertEquals(2, t.level)
@@ -77,8 +77,8 @@ class GameTest {
         for (c in buildableCells(g).sortedByDescending { nearPath(g, it) }.take(10)) g.build(TowerType.PULSE, c.col, c.row)
         val oldMin = g.world.minCol
         val towers = g.towers.toList()
-        for (w in 1 until WAVES_PER_SECTOR) {
-            assertEquals(WAVES_PER_SECTOR, g.nextExpansionWave)
+        for (w in 1 until Balance.WAVES_PER_SECTOR) {
+            assertEquals(Balance.WAVES_PER_SECTOR, g.nextExpansionWave)
             g.startWave()
             runWave(g)
             assertEquals(Phase.BUILD, g.phase)
@@ -86,14 +86,14 @@ class GameTest {
         }
         assertTrue(g.events.none { it is GameEvent.Expanded })
         g.startWave()
-        assertEquals(WAVES_PER_SECTOR, g.nextExpansionWave)
+        assertEquals(Balance.WAVES_PER_SECTOR, g.nextExpansionWave)
         runWave(g)
         assertEquals(Phase.BUILD, g.phase)
         assertEquals(2, g.world.sections.size)
         assertEquals(oldMin - SECTION_COLS, g.world.minCol)
         assertEquals(towers, g.towers)
         assertTrue(g.events.any { it is GameEvent.Expanded })
-        assertEquals(2 * WAVES_PER_SECTOR, g.nextExpansionWave)
+        assertEquals(2 * Balance.WAVES_PER_SECTOR, g.nextExpansionWave)
         // The new sector is open for building.
         assertTrue(g.canBuild(g.world.minCol, (0 until ROWS).first { !g.world.isPath(g.world.minCol, it) }))
     }
@@ -108,12 +108,12 @@ class GameTest {
         while (g.phase == Phase.WAVE) {
             g.update(1f / 30)
             for (e in g.enemies) {
-                val expected = (g.world.frontier.index - e.sector) * e.maxHp * SEAM_BARRIER
+                val expected = (g.world.frontier.index - e.sector) * e.maxHp * Balance.SEAM_BARRIER
                 assertEquals(expected, e.barrier, 1e-3f)
                 maxBarrier = maxOf(maxBarrier, e.barrier / e.maxHp)
             }
         }
-        assertEquals(2 * SEAM_BARRIER, maxBarrier, 1e-4f)
+        assertEquals(2 * Balance.SEAM_BARRIER, maxBarrier, 1e-4f)
 
         // Barrier soaks damage before HP.
         val e = Enemy(EnemyType.GRUNT, 1f)
@@ -125,8 +125,8 @@ class GameTest {
 
     @Test
     fun sectorsMakeEnemiesStronger() {
-        assertEquals(1f, Game.sectorScale(1), 0f)
-        assertTrue(Game.sectorScale(4) > Game.sectorScale(2))
+        assertEquals(1f, Balance.sectorScale(1), 0f)
+        assertTrue(Balance.sectorScale(4) > Balance.sectorScale(2))
         assertEquals(1, World.sectionIndexAt(-1))
         assertEquals(1, World.sectionIndexAt(-SECTION_COLS))
         assertEquals(2, World.sectionIndexAt(-SECTION_COLS - 1))
@@ -140,8 +140,8 @@ class GameTest {
         val cells = buildableCells(g)
         var built = 0
         for (c in cells) if (g.build(TowerType.RAIL, c.col, c.row) != null) built++
-        assertEquals(FIRST_SECTION_POWER / TowerType.RAIL.power, built)
-        assertEquals(FIRST_SECTION_POWER % TowerType.RAIL.power, g.powerLeft(0))
+        assertEquals(Balance.FIRST_SECTION_POWER / TowerType.RAIL.power, built)
+        assertEquals(Balance.FIRST_SECTION_POWER % TowerType.RAIL.power, g.powerLeft(0))
         val free = cells.first { g.canBuild(it.col, it.row) }
         assertNull(g.build(TowerType.RAIL, free.col, free.row))
         // Selling frees power; swapping counts the old tower's power as freed.
@@ -152,7 +152,7 @@ class GameTest {
         assertNotNull(g.build(TowerType.RAIL, free.col, free.row))
         // A new sector brings its own budget.
         g.world.addSection()
-        assertEquals(SECTION_POWER, g.powerLeft(1))
+        assertEquals(Balance.SECTION_POWER, g.powerLeft(1))
     }
 
     @Test
@@ -164,12 +164,12 @@ class GameTest {
         for (c in buildableCells(g).sortedByDescending { nearPath(g, it) }.take(10)) g.build(TowerType.PULSE, c.col, c.row)
         for (t in g.towers) repeat(3) { g.upgrade(t) }
         val airByWave = ArrayList<Int>()
-        repeat(2 * WAVES_PER_SECTOR + 1) {
+        repeat(2 * Balance.WAVES_PER_SECTOR + 1) {
             g.startWave()
             var air = 0
             while (g.phase == Phase.WAVE) {
                 g.update(1f / 30)
-                air = maxOf(air, g.enemies.count { it.type.air })
+                air = maxOf(air, g.enemies.count { it.type.layer == Layer.AIR })
             }
             airByWave.add(air)
             assertEquals(Phase.BUILD, g.phase)
@@ -177,7 +177,7 @@ class GameTest {
         // Waves 6 and 11 open sectors 2 and 3; nothing flies otherwise.
         val expected = List(airByWave.size) { w -> if (w + 1 == 6) 1 else if (w + 1 == 11) 2 else 0 }
         assertTrue("air per wave $airByWave", airByWave.zip(expected).all { (a, e) -> if (e == 0) a == 0 else a in 1..e })
-        assertEquals(3, Game.airRaidSize(7))
+        assertEquals(3, Balance.airRaidSize(7))
     }
 
     @Test
@@ -189,8 +189,8 @@ class GameTest {
             val t = Tower(type, 0, 0)
             assertTrue(g.canHit(t, crawler))
             assertEquals("$type L1", type == TowerType.CRYO, g.canHit(t, ship))
-            t.level = AIR_LEVEL
-            assertEquals("$type L$AIR_LEVEL", type != TowerType.PLASMA && type != TowerType.TESLA, g.canHit(t, ship))
+            t.level = Balance.AIR_LEVEL
+            assertEquals("$type L$Balance.AIR_LEVEL", type != TowerType.PLASMA && type != TowerType.TESLA, g.canHit(t, ship))
         }
     }
 
@@ -199,14 +199,14 @@ class GameTest {
         val g = Game(12)
         g.world.addSection()
         // Skip to the wave right after the sector opened.
-        repeat(WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30); if (g.phase == Phase.GAME_OVER) return }
+        repeat(Balance.WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30); if (g.phase == Phase.GAME_OVER) return }
         g.lives = 1000
         g.startWave()
         val ys = ArrayList<Float>()
         var ship: Enemy? = null
         while (g.phase == Phase.WAVE) {
             g.update(1f / 30)
-            ship = ship ?: g.enemies.firstOrNull { it.type.air }
+            ship = ship ?: g.enemies.firstOrNull { it.type.layer == Layer.AIR }
             ship?.let { if (it.alive) { ys.add(it.y); assertTrue(it.y in 0f..ROWS.toFloat()) } }
         }
         assertTrue("ship never flew", ys.size > 100)
@@ -220,7 +220,7 @@ class GameTest {
         g.lives = 1000
         repeat(8) { g.startWave() ; while (g.phase == Phase.WAVE) {
             g.update(1f / 30)
-            val big = g.enemies.filter { it.alive && !it.type.air && it.radius >= QUEUE_RADIUS && it.dist > 1f }.sortedBy { it.dist }
+            val big = g.enemies.filter { it.alive && it.type.layer == Layer.GROUND && it.radius >= Balance.QUEUE_RADIUS && it.dist > 1f }.sortedBy { it.dist }
             for ((a, b) in big.zipWithNext()) assertTrue("${a.type} and ${b.type} overlap", b.dist - a.dist >= (a.radius + b.radius) * 1.05f)
         } }
     }
@@ -229,7 +229,7 @@ class GameTest {
     fun cryoSlowsGunships() {
         val g = Game(14)
         g.lives = 1000
-        repeat(WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30) }
+        repeat(Balance.WAVES_PER_SECTOR) { g.startWave(); while (g.phase == Phase.WAVE) g.update(1f / 30) }
         // Cryo on every free tile of the core sector: any gunship crossing it gets slowed.
         g.credits = 100_000
         for (c in buildableCells(g).filter { it.col >= 0 }) g.build(TowerType.CRYO, c.col, c.row)
@@ -237,7 +237,7 @@ class GameTest {
         var slowed = false
         while (g.phase == Phase.WAVE) {
             g.update(1f / 30)
-            if (g.enemies.any { it.type.air && it.slowTimer > 0f }) slowed = true
+            if (g.enemies.any { it.type.layer == Layer.AIR && it.slowTimer > 0f }) slowed = true
         }
         assertTrue(slowed)
     }
@@ -254,11 +254,11 @@ class GameTest {
         // Full but not maxed: no bonus.
         assertFalse(g.world.sections[0].efficient)
         val towers = g.towers.toList()
-        for (t in towers.dropLast(1)) repeat(MAX_LEVEL) { g.upgrade(t) }
+        for (t in towers.dropLast(1)) repeat(Balance.MAX_LEVEL) { g.upgrade(t) }
         assertFalse(g.world.sections[0].efficient)
-        repeat(MAX_LEVEL) { g.upgrade(towers.last()) }
+        repeat(Balance.MAX_LEVEL) { g.upgrade(towers.last()) }
         assertTrue(g.world.sections[0].efficient)
-        assertEquals(EFFICIENCY_BONUS, g.powerLeft(0))
+        assertEquals(Balance.EFFICIENCY_BONUS, g.powerLeft(0))
         assertTrue(g.events.any { it is GameEvent.Message && it.text.contains("EFFICIENCY") })
         // The bonus can be spent on fresh towers without losing it.
         val free = cells.first { g.canBuild(it.col, it.row) }
@@ -372,9 +372,9 @@ class GameTest {
 
     @Test
     fun wavesScale() {
-        assertNotNull(Game.composeWave(1).firstOrNull())
-        assertTrue(Game.composeWave(10).size > Game.composeWave(1).size)
-        assertTrue(Game.composeWave(5).any { it.type == EnemyType.BOSS })
-        assertTrue(Game.hpScale(10) > Game.hpScale(2))
+        assertNotNull(Balance.composeWave(1).firstOrNull())
+        assertTrue(Balance.composeWave(10).size > Balance.composeWave(1).size)
+        assertTrue(Balance.composeWave(5).any { it.type == EnemyType.BOSS })
+        assertTrue(Balance.hpScale(10) > Balance.hpScale(2))
     }
 }

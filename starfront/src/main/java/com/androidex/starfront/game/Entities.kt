@@ -1,30 +1,7 @@
 package com.androidex.starfront.game
 
 import kotlin.math.max
-import kotlin.math.pow
 import kotlin.math.roundToInt
-
-const val MAX_LEVEL = 4
-const val SELL_RATIO = 0.7f
-
-enum class TowerType(
-    val title: String,
-    val blurb: String,
-    val cost: Int,
-    val range: Float,
-    /** Shots per second. */
-    val rate: Float,
-    val damage: Float,
-    val color: Int,
-    /** Sector power the tower draws; each sector has a fixed budget. */
-    val power: Int,
-) {
-    PULSE("Pulse Laser", "Air at LV3+", 50, 2.6f, 2.4f, 7f, 0xFF00E5FF.toInt(), 1),
-    PLASMA("Plasma Mortar", "Splash damage", 90, 3.2f, 0.7f, 22f, 0xFFFF9100.toInt(), 2),
-    CRYO("Cryo Emitter", "Slows in area", 70, 2.0f, 1.0f, 3f, 0xFF80D8FF.toInt(), 2),
-    TESLA("Arc Coil", "Chain lightning", 120, 2.4f, 1.0f, 15f, 0xFFB388FF.toInt(), 3),
-    RAIL("Railgun", "Pierce, air LV3+", 160, 5.5f, 0.35f, 75f, 0xFF76FF03.toInt(), 3),
-}
 
 enum class TargetMode(val label: String) { FIRST("FIRST"), STRONG("STRONG"), CLOSE("CLOSE") }
 
@@ -40,41 +17,27 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
 
     val x get() = col + 0.5f
     val y get() = row + 0.5f
-    val damage get() = type.damage * 1.55f.pow(level - 1)
-    val range get() = type.range * (1f + 0.12f * (level - 1))
-    val rate get() = type.rate * (1f + 0.15f * (level - 1))
-    val sellValue get() = (invested * SELL_RATIO).roundToInt()
+    val damage get() = Balance.damage(type.damage, level)
+    /** Damage after one more upgrade. */
+    val nextDamage get() = damage * Balance.DAMAGE_GROWTH
+    val range get() = Balance.range(type.range, level)
+    val rate get() = Balance.rate(type.rate, level)
+    val sellValue get() = (invested * Balance.SELL_RATIO).roundToInt()
 
     /** Null when maxed out. */
     val upgradeCost: Int?
-        get() = if (level >= MAX_LEVEL) null else (type.cost * (0.75f + 0.5f * (level - 1))).roundToInt()
+        get() = if (level >= Balance.MAX_LEVEL) null else Balance.upgradeCost(type.cost, level)
 
-    // Type-specific extras that scale with level.
-    val splash get() = 1.0f + 0.12f * (level - 1)
-    val slowFactor get() = 0.55f - 0.07f * (level - 1)
-    val chainJumps get() = 2 + level
-}
+    // Weapon extras that scale with level.
+    val splash get() = Balance.splash(level)
+    val slowFactor get() = Balance.slowFactor(level)
+    val chainJumps get() = Balance.chainJumps(level)
 
-enum class EnemyType(
-    val title: String,
-    val hp: Float,
-    val speed: Float,
-    val armor: Float,
-    val shield: Float,
-    val bounty: Int,
-    val coreDamage: Int,
-    val radius: Float,
-    val color: Int,
-    /** Flies straight for the core instead of following the path; only some towers can hit it. */
-    val air: Boolean = false,
-) {
-    SCOUT("Scout Drone", 18f, 2.2f, 0f, 0f, 4, 1, 0.22f, 0xFFEEFF41.toInt()),
-    GRUNT("Crawler", 42f, 1.3f, 0f, 0f, 6, 1, 0.27f, 0xFFFF5252.toInt()),
-    SWARM("Swarmling", 9f, 2.6f, 0f, 0f, 2, 1, 0.14f, 0xFFFFAB40.toInt()),
-    BRUTE("Juggernaut", 130f, 0.8f, 4f, 0f, 14, 2, 0.36f, 0xFFFF6E40.toInt()),
-    PHASE("Phase Wraith", 50f, 1.6f, 0f, 40f, 11, 1, 0.26f, 0xFFF06292.toInt()),
-    BOSS("Dreadnought", 700f, 0.55f, 7f, 140f, 120, 8, 0.55f, 0xFFD500F9.toInt()),
-    GUNSHIP("Gunship", 200f, 0.85f, 2f, 0f, 40, 3, 0.45f, 0xFF64FFDA.toInt(), air = true),
+    /** Whether this tower, at its current level, can hit units on [layer]. */
+    fun reaches(layer: Layer) = when (layer) {
+        Layer.GROUND -> true
+        Layer.AIR -> type.airFromLevel?.let { level >= it } ?: false
+    }
 }
 
 class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
@@ -124,7 +87,7 @@ class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
             if (dmg <= 0f) return false
         }
         if (maxShield > 0f) {
-            shieldDelay = 2.5f
+            shieldDelay = Balance.SHIELD_REGEN_DELAY
             if (shield > 0f) {
                 val absorbed = minOf(shield, dmg)
                 shield -= absorbed
@@ -132,7 +95,7 @@ class Enemy(val type: EnemyType, scale: Float, shieldScale: Float = scale) {
                 if (dmg <= 0f) return false
             }
         }
-        if (!pierceArmor && type.armor > 0f) dmg = max(dmg - type.armor, dmg * 0.2f)
+        if (!pierceArmor && type.armor > 0f) dmg = max(dmg - type.armor, dmg * Balance.ARMOR_FLOOR)
         hp -= dmg
         if (hp <= 0f) {
             alive = false
@@ -158,6 +121,8 @@ class Projectile(
     val damage: Float,
     val splash: Float,
     val color: Int,
+    /** Whether its splash can catch air units (fixed when fired). */
+    val hitsAir: Boolean,
 ) {
     var tx = target?.x ?: x
     var ty = target?.y ?: y

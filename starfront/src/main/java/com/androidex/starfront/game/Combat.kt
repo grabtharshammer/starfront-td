@@ -50,6 +50,13 @@ class Combat(private val game: Game) {
         }
     }
 
+    /** A shell from the player's tank at ([x], [y]), barrel facing [aim]: a small splash, ground only. */
+    fun fireShell(x: Float, y: Float, aim: Float, target: Enemy, damage: Float) {
+        val mx = x + cos(aim) * 0.4f
+        val my = y + sin(aim) * 0.4f
+        projectiles.add(Projectile(ShotKind.ORB, mx, my, target, Balance.TANK_SHOT_SPEED, damage, Balance.TANK_SPLASH, Balance.TANK_COLOR, false))
+    }
+
     private fun pickTarget(t: Tower): Enemy? {
         val r2 = t.range * t.range
         var best: Enemy? = null

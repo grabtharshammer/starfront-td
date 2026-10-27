@@ -82,6 +82,14 @@ object Synth {
             tone(1.6f, 440f, 55f, Wave.SAW, decay = 1.8f) * 0.5f,
             tone(1.6f, 220f, 30f, Wave.SQUARE, decay = 1.8f) * 0.3f,
         )
+        Sfx.TANK_FIRE -> mix(
+            tone(0.2f, 170f, 60f, Wave.SQUARE, decay = 14f) * 0.35f,
+            noise(0.18f, cutoff = 0.2f, decay = 18f) * 0.6f,
+        )
+        Sfx.TANK_LAUNCH -> mix(
+            tone(0.9f, 55f, 110f, Wave.SAW, decay = 2.5f, attack = 0.1f) * 0.4f,
+            delay(notes(0.08f, 392f, 523f, 659f) * 0.5f, 0.2f),
+        )
     }
 
     /** Encodes samples in [-1, 1] as a 16-bit mono WAV file. */

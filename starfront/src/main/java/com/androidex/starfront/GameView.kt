@@ -235,6 +235,10 @@ class GameView(
             return
         }
         if (regionAt(x, y) != Region.MAP) return
+        if (game.tanks.isAtBay(camera.wx(x), camera.wy(y))) {
+            launchTank()
+            return
+        }
         preview = null
         val col = camera.colAt(x)
         val row = camera.rowAt(y)
@@ -321,6 +325,14 @@ class GameView(
         autoTimer = 0f
         game.startWave()
         showBanner("WAVE ${game.wave} INBOUND")
+    }
+
+    private fun launchTank() {
+        when {
+            game.launchTank() -> performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            game.phase != Phase.WAVE -> showBanner("LAUNCH THE TANK DURING A WAVE")
+            else -> showBanner("ONE TANK AT A TIME")
+        }
     }
 
     // ---- Hints ----

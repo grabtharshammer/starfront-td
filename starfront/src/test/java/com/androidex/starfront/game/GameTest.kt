@@ -226,6 +226,62 @@ class GameTest {
     }
 
     @Test
+    fun tankHoldsUpGroundUnits() {
+        val g = Game(9)
+        g.lives = 1000
+        g.wave = 7
+        g.tanks.charges = 1
+        assertFalse("only during a wave", g.launchTank())
+        g.startWave()
+        while (g.enemies.size < 15) g.update(1f / 30)
+        assertTrue(g.launchTank())
+        assertEquals(0, g.tanks.charges)
+        assertFalse(g.launchTank())
+        val tank = g.tanks.tank!!
+        val behind = HashSet<Enemy>()
+        var sawJam = false
+        var kills = 0
+        // Frames each pair in the line has spent piled up: a unit overtaking as the line forms
+        // overlaps briefly, then backs off.
+        var piled = HashMap<Pair<Enemy, Enemy>, Int>()
+        while (g.tanks.tank != null && g.phase == Phase.WAVE) {
+            val before = g.enemies.count { it.alive }
+            g.update(1f / 30)
+            kills += maxOf(0, before - g.enemies.count { it.alive })
+            for (e in g.enemies) if (e.alive && e.type.layer == Layer.GROUND && e.dist < tank.dist) behind.add(e)
+            for (e in behind) if (e.alive) assertTrue("${e.type} got past the tank", e.dist < tank.dist)
+            // The held-up line is spaced out rather than piled on one spot.
+            val jam = g.enemies.filter { it.alive && it.type.layer == Layer.GROUND && it.dist < tank.dist && it.dist > tank.dist - 3f }.sortedByDescending { it.dist }
+            if (tank.blocked && jam.size >= 3) sawJam = true
+            val now = HashMap<Pair<Enemy, Enemy>, Int>()
+            for ((a, b) in jam.zipWithNext()) {
+                if (a.dist - b.dist >= (a.radius + b.radius) * Balance.STACK_GAP * 0.9f) continue
+                val frames = (piled[a to b] ?: 0) + 1
+                assertTrue("${a.type} and ${b.type} piled up", frames < 60)
+                now[a to b] = frames
+            }
+            piled = now
+        }
+        assertTrue("never held up a line", sawJam)
+        assertTrue("never fired", kills > 0)
+    }
+
+    @Test
+    fun tanksAreEarnedPerSectorAndSaved() {
+        val g = Game(4)
+        g.wave = Balance.WAVES_PER_SECTOR
+        g.waves.complete()
+        assertEquals(2, g.world.sections.size)
+        assertEquals(1, g.tanks.charges)
+        val r = Game.restore(g.saveState()!!)!!
+        assertEquals(1, r.tanks.charges)
+        // Saves from before tanks get one per sector opened.
+        r.world.addSection()
+        val old = r.saveState()!!.lines().filter { !it.startsWith("tanks=") }.joinToString("\n")
+        assertEquals(2, Game.restore(old)!!.tanks.charges)
+    }
+
+    @Test
     fun cryoSlowsGunships() {
         val g = Game(14)
         g.lives = 1000

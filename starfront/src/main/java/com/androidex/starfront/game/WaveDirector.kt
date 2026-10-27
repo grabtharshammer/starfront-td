@@ -2,7 +2,7 @@ package com.androidex.starfront.game
 
 data class Spawn(val type: EnemyType, val at: Float)
 
-/** The wave schedule: what spawns when, the air raid after a sector opens, and what clearing a wave unlocks. */
+/** The wave schedule: what spawns when, the air raid after a sector opens, and what clearing a wave unlocks (sectors and tanks). */
 class WaveDirector(private val game: Game) {
     private val queue = ArrayDeque<Spawn>()
     private var time = 0f
@@ -68,7 +68,8 @@ class WaveDirector(private val game: Game) {
         val fb = game.feedback
         if (wave % Balance.WAVES_PER_SECTOR == 0) {
             val s = game.world.addSection()
-            fb.message("WAVE $wave CLEARED  +$bonus  ·  SECTOR ${s.index + 1} ONLINE")
+            game.tanks.charges++
+            fb.message("WAVE $wave CLEARED  +$bonus  ·  SECTOR ${s.index + 1} ONLINE  ·  TANK READY")
             fb.event(GameEvent.Expanded(s))
             fb.sound(Sfx.SECTOR_OPEN)
         } else {

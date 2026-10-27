@@ -61,6 +61,33 @@ object Balance {
     /** Gap kept between queued units, as a multiple of their combined radii. */
     const val QUEUE_GAP = 1.1f
 
+    // ---- Tank ----
+    // One is earned per sector opened. Its HP and damage scale with the wave like enemy HP does.
+    const val TANK_HP = 600f
+    /** Damage per shell, before scaling. */
+    const val TANK_DAMAGE = 16f
+    /** Shells per second. */
+    const val TANK_RATE = 2f
+    const val TANK_RANGE = 2.4f
+    const val TANK_SPLASH = 0.7f
+    const val TANK_SHOT_SPEED = 9f
+    /** Cells per second along the route. */
+    const val TANK_SPEED = 1.0f
+    const val TANK_RADIUS = 0.36f
+    /** Cells south of the core where it parks. */
+    const val TANK_PARK_OFFSET = 1.9f
+    /** Units this close (beyond touching) to its front wear it down. */
+    const val TANK_CONTACT = 0.25f
+    /** Damage per second a unit pressed against it deals, as a fraction of the unit's max HP. */
+    const val TANK_CONTACT_DPS = 0.12f
+    const val TANK_COLOR = 0xFF69F0AE.toInt()
+    /** Gap kept between units held up behind the tank, as a multiple of their combined radii (below 1 overlaps a little). */
+    const val STACK_GAP = 0.8f
+    /** Cells per second a held-up unit backs off when it ends up overlapping the one ahead. */
+    const val SETTLE_SPEED = 0.6f
+    /** How close behind the line held up by the tank a unit must be to count as part of it. */
+    const val JAM_SLACK = 0.3f
+
     fun hpScale(wave: Int): Float {
         // Exponential: the path and the tower count keep growing, so linear growth would stall.
         val n = (wave - 1).toFloat()

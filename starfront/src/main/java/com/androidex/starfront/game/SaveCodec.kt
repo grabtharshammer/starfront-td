@@ -11,6 +11,7 @@ object SaveCodec {
         appendLine("wave=${g.wave}")
         appendLine("credits=${g.credits}")
         appendLine("lives=${g.lives}")
+        appendLine("tanks=${g.tanks.charges}")
         appendLine("efficient=${g.world.sections.filter { it.efficient }.joinToString(",") { it.index.toString() }}")
         for (t in g.towers) appendLine("tower=${t.type.name},${t.col},${t.row},${t.level},${t.invested},${t.mode.name},${t.kills}")
     }
@@ -27,6 +28,8 @@ object SaveCodec {
         g.wave = values.getValue("wave").toInt()
         g.credits = values.getValue("credits").toInt()
         g.lives = values.getValue("lives").toInt()
+        // Saves from before tanks existed get the ones their opened sectors would have earned.
+        g.tanks.charges = values["tanks"]?.toInt() ?: (g.world.sections.size - 1)
         values["efficient"]?.split(',')?.filter { it.isNotBlank() }?.forEach { g.world.sections[it.toInt()].efficient = true }
         for (line in lines) {
             if (!line.startsWith("tower=")) continue

@@ -70,6 +70,7 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         for (sec in world.sections) if (sec.endCol >= c0 && sec.startCol <= c1) drawPowerBolt(c, game, sec, time)
         drawGate(c, world.minCol - 1f, world.frontier.entryRow + 0.5f, time)
         drawCore(c, game, world.coreCol + 0.5f, world.coreRow + 0.5f, time)
+        drawTankBay(c, game, time)
 
         if (selection != null) drawSelection(c, game, selection, preview, time)
 
@@ -77,6 +78,7 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         val vx1 = camera.x + camera.viewW + 1.5f
         for (t in game.towers) if (t.x in vx0..vx1) sprites.tower(c, t.type, t.level, sx(t.x), sy(t.y), scale, t.angle, time, t.sinceShot)
         for (e in game.enemies) if (e.type.layer == Layer.GROUND && e.x in vx0..vx1) sprites.enemy(c, e, sx(e.x), sy(e.y), scale, time)
+        game.tanks.tank?.let { if (it.x in vx0..vx1) sprites.tank(c, it, sx(it.x), sy(it.y), scale, time) }
         drawProjectiles(c, game, vx0, vx1)
         // Air units fly above everything on the ground.
         for (e in game.enemies) if (e.type.layer == Layer.AIR && e.x in vx0..vx1) sprites.enemy(c, e, sx(e.x), sy(e.y), scale, time)
@@ -254,6 +256,38 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
         }
         fill.color = Color.WHITE
         c.drawCircle(x, y, scale * 0.08f, fill)
+    }
+
+    /** The pad south of the core with the parked tank, its count, and a launch prompt during a wave. */
+    private fun drawTankBay(c: Canvas, game: Game, time: Float) {
+        val bay = game.tanks
+        if (bay.charges <= 0) return
+        val x = sx(bay.parkX)
+        val y = sy(bay.parkY)
+        val half = scale * 0.48f
+        rect.set(x - half, y - half, x + half, y + half)
+        fill.color = 0xFF0F1A2C.toInt()
+        c.drawRoundRect(rect, scale * 0.12f, scale * 0.12f, fill)
+        stroke.color = Balance.TANK_COLOR
+        stroke.strokeWidth = 1.5f * d
+        stroke.alpha = if (bay.canLaunch) (150 + 100 * sin(time * 5f)).toInt() else 90
+        stroke.pathEffect = DashPathEffect(floatArrayOf(6 * d, 5 * d), 0f)
+        c.drawRoundRect(rect, scale * 0.12f, scale * 0.12f, stroke)
+        stroke.pathEffect = null
+        stroke.alpha = 255
+        sprites.parkedTank(c, x, y, scale, time)
+        text.textAlign = Paint.Align.CENTER
+        text.textSize = 10 * d
+        text.color = Balance.TANK_COLOR
+        if (bay.charges > 1) c.drawText("x${bay.charges}", x + half, y - half - 3 * d, text)
+        if (bay.canLaunch) {
+            text.alpha = (170 + 85 * sin(time * 5f)).toInt()
+            c.drawText("TAP TO LAUNCH", x, y + half + 13 * d, text)
+            text.alpha = 255
+        } else {
+            text.color = 0x9969F0AE.toInt()
+            c.drawText("TANK", x, y + half + 13 * d, text)
+        }
     }
 
     /**

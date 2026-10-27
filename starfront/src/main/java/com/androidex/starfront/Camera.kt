@@ -38,8 +38,10 @@ class Camera(
 
     fun sx(wx: Float) = (wx - x) * scale
     fun sy(wy: Float) = top + (wy - y) * scale
-    fun colAt(px: Float) = floor(x + px / scale).toInt()
-    fun rowAt(py: Float) = floor(y + (py - top) / scale).toInt()
+    fun wx(px: Float) = x + px / scale
+    fun wy(py: Float) = y + (py - top) / scale
+    fun colAt(px: Float) = floor(wx(px)).toInt()
+    fun rowAt(py: Float) = floor(wy(py)).toInt()
 
     fun resize(w: Int, h: Int, first: Boolean) {
         screenW = w

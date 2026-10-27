@@ -22,6 +22,8 @@ enum class Sfx(val volume: Float) {
     WAVE_CLEAR(0.6f),
     SECTOR_OPEN(0.8f),
     GAME_OVER(0.9f),
+    TANK_FIRE(0.5f),
+    TANK_LAUNCH(0.8f),
 }
 
 /**

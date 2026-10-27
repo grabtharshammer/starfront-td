@@ -27,6 +27,7 @@ class Game(val seed: Long = Random.nextLong()) {
     val feedback = Feedback(Random(seed xor 0x2545F4914F6CDD1DL))
     val defenses = Defenses(this)
     val waves = WaveDirector(this)
+    val tanks = TankBay(this)
     internal val movement = Movement(this)
     internal val combat = Combat(this)
 
@@ -73,6 +74,8 @@ class Game(val seed: Long = Random.nextLong()) {
 
     fun canHit(t: Tower, e: Enemy) = combat.canHit(t, e)
 
+    fun launchTank() = tanks.launch()
+
     fun sound(sfx: Sfx, x: Float = Float.NaN, y: Float = Float.NaN) = feedback.sound(sfx, x, y)
 
     // ---- Waves ----
@@ -89,11 +92,13 @@ class Game(val seed: Long = Random.nextLong()) {
         clock += dt
         if (phase == Phase.WAVE) {
             waves.update(dt)
+            tanks.update(dt)
             movement.update(dt)
             combat.update(dt)
             enemies.removeAll { !it.alive }
             if (phase == Phase.WAVE && waves.finished) {
                 combat.clear()
+                tanks.clear()
                 phase = Phase.BUILD
                 checkpoint = null
                 waves.complete()
@@ -113,6 +118,7 @@ class Game(val seed: Long = Random.nextLong()) {
         if (lives == 0 && phase != Phase.GAME_OVER) {
             phase = Phase.GAME_OVER
             waves.abort()
+            tanks.clear()
             feedback.event(GameEvent.GameOver(wave))
             feedback.sound(Sfx.GAME_OVER)
         }

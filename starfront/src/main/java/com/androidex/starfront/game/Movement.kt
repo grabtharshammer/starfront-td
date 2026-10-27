@@ -9,7 +9,7 @@ import kotlin.math.sin
 /**
  * Moves enemies along their routes. Ground units walk the path, big ones in single file; air
  * units fly a weave straight from the warp gate to the core. Crossing a sector seam heading
- * east grants a barrier; reaching the end damages the core.
+ * east grants a barrier; reaching the end damages the core. The player's tank blocks ground units.
  */
 class Movement(private val game: Game) {
     private val tmp = FloatArray(3)
@@ -46,6 +46,7 @@ class Movement(private val game: Game) {
 
     fun update(dt: Float) {
         queueBigGroundUnits()
+        holdBehindTank()
         for (e in game.enemies) {
             if (!e.alive) continue
             e.sinceHit += dt
@@ -58,7 +59,12 @@ class Movement(private val game: Game) {
                 if (e.shieldDelay <= 0f) e.shield = minOf(e.maxShield, e.shield + e.maxShield * Balance.SHIELD_REGEN * dt)
             }
             val length = routeLength(e)
-            e.dist = max(e.dist, minOf(e.dist + e.type.speed * e.slowFactor * dt, e.limit))
+            e.dist = if (e.dist <= e.limit) {
+                minOf(e.dist + e.type.speed * e.slowFactor * dt, e.limit)
+            } else {
+                // Caught overlapping the unit ahead (it overtook as the line formed): ease back.
+                max(max(e.limit, 0f), e.dist - Balance.SETTLE_SPEED * dt)
+            }
             e.progress = e.dist / length
             if (e.dist >= length) {
                 game.coreHit(e)
@@ -81,6 +87,28 @@ class Movement(private val game: Game) {
             val ahead = queue[i - 1]
             val e = queue[i]
             e.limit = ahead.dist - (ahead.radius + e.radius) * Balance.QUEUE_GAP
+        }
+    }
+
+    /**
+     * Ground units can't get past the tank. Those stopped by it pile up in a loose line behind
+     * it, each held just short of the one ahead, and units still on the way stop at the back of
+     * that line. Units free of the jam can still overtake each other.
+     */
+    private fun holdBehindTank() {
+        val tank = game.tanks.tank ?: return
+        queue.clear()
+        for (e in game.enemies) if (e.alive && e.type.layer == Layer.GROUND && e.dist < tank.dist) queue.add(e)
+        queue.sortByDescending { it.dist }
+        var tailDist = tank.dist
+        var tailRadius = tank.radius
+        for (e in queue) {
+            val stop = tailDist - (tailRadius + e.radius) * Balance.STACK_GAP
+            e.limit = minOf(e.limit, stop)
+            if (e.dist >= stop - Balance.JAM_SLACK) {
+                tailDist = e.dist
+                tailRadius = e.radius
+            }
         }
     }
 

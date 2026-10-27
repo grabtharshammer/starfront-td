@@ -6,9 +6,11 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import com.androidex.starfront.game.BARRIER_COLOR
+import com.androidex.starfront.game.Balance
 import com.androidex.starfront.game.Enemy
 import com.androidex.starfront.game.EnemyType
 import com.androidex.starfront.game.Layer
+import com.androidex.starfront.game.Tank
 import com.androidex.starfront.game.TowerType
 import com.androidex.starfront.game.Weapon
 import kotlin.math.cos
@@ -26,7 +28,7 @@ fun Path.regularPolygon(x: Float, y: Float, r: Float, sides: Int, rot: Float) {
     close()
 }
 
-/** Tower and enemy artwork, drawn at screen positions. [d] is the display density. */
+/** Tower, enemy and tank artwork, drawn at screen positions. [d] is the display density. */
 class Sprites(private val d: Float) {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
@@ -111,6 +113,75 @@ class Sprites(private val d: Float) {
     private fun hasBarrel(w: Weapon) = when (w) {
         Weapon.BOLT, Weapon.MORTAR, Weapon.RAIL -> true
         Weapon.FROST, Weapon.ARC -> false
+    }
+
+    /** The player's tank [t] at screen position ([x], [y]), with a health bar once damaged; [scale] is px per cell. */
+    fun tank(c: Canvas, t: Tank, x: Float, y: Float, scale: Float, time: Float) {
+        tankBody(c, x, y, scale, t.heading, t.aim, time, moving = !t.blocked, sinceShot = t.sinceShot)
+        if (t.sinceHit < 0.08f) {
+            fill.color = 0xFFFF5252.toInt(); fill.alpha = 110
+            c.drawCircle(x, y, t.radius * scale * 1.1f, fill)
+            fill.alpha = 255
+        }
+        if (t.hp < t.maxHp) {
+            val bw = scale * 0.8f
+            val by = y - t.radius * scale - scale * 0.22f
+            fill.color = 0xCC000000.toInt()
+            c.drawRect(x - bw / 2, by, x + bw / 2, by + 4 * d, fill)
+            val f = (t.hp / t.maxHp).coerceIn(0f, 1f)
+            fill.color = if (f > 0.5f) Balance.TANK_COLOR else if (f > 0.25f) 0xFFFFD740.toInt() else 0xFFFF5252.toInt()
+            c.drawRect(x - bw / 2, by, x - bw / 2 + bw * f, by + 4 * d, fill)
+        }
+    }
+
+    /** A tank waiting in its bay, facing north toward the core. */
+    fun parkedTank(c: Canvas, x: Float, y: Float, scale: Float, time: Float) {
+        val up = -Math.PI.toFloat() / 2
+        tankBody(c, x, y, scale, up, up, time, moving = false, sinceShot = 10f)
+    }
+
+    private fun tankBody(c: Canvas, x: Float, y: Float, s: Float, heading: Float, aim: Float, time: Float, moving: Boolean, sinceShot: Float) {
+        val r = Balance.TANK_RADIUS * s
+        val col = Balance.TANK_COLOR
+        c.save()
+        c.rotate(Math.toDegrees(heading.toDouble()).toFloat(), x, y)
+        // Treads, with links that roll while it drives.
+        fill.color = 0xFF263238.toInt()
+        rect.set(x - r * 1.1f, y - r * 0.95f, x + r * 1.1f, y - r * 0.5f)
+        c.drawRoundRect(rect, r * 0.2f, r * 0.2f, fill)
+        rect.set(x - r * 1.1f, y + r * 0.5f, x + r * 1.1f, y + r * 0.95f)
+        c.drawRoundRect(rect, r * 0.2f, r * 0.2f, fill)
+        stroke.color = 0xFF546E7A.toInt(); stroke.alpha = 255; stroke.strokeWidth = r * 0.07f
+        val roll = if (moving) (time * 3f) % 1f else 0f
+        for (i in 0 until 5) {
+            val lx = x - r * 1.0f + (i + roll) * r * 0.42f
+            if (lx > x + r * 1.05f) continue
+            c.drawLine(lx, y - r * 0.92f, lx, y - r * 0.53f, stroke)
+            c.drawLine(lx, y + r * 0.53f, lx, y + r * 0.92f, stroke)
+        }
+        // Hull
+        fill.color = 0xFF1B5E20.toInt()
+        rect.set(x - r * 0.95f, y - r * 0.6f, x + r * 0.95f, y + r * 0.6f)
+        c.drawRoundRect(rect, r * 0.25f, r * 0.25f, fill)
+        stroke.color = col; stroke.strokeWidth = r * 0.09f
+        c.drawRoundRect(rect, r * 0.25f, r * 0.25f, stroke)
+        c.restore()
+        // Turret and barrel, turned toward its target.
+        c.save()
+        c.rotate(Math.toDegrees(aim.toDouble()).toFloat(), x, y)
+        stroke.color = 0xFFB0BEC5.toInt(); stroke.strokeWidth = r * 0.2f
+        stroke.strokeCap = Paint.Cap.BUTT
+        c.drawLine(x, y, x + r * 1.25f, y, stroke)
+        stroke.strokeCap = Paint.Cap.ROUND
+        fill.color = 0xFF2E7D32.toInt()
+        c.drawCircle(x, y, r * 0.42f, fill)
+        fill.color = col
+        c.drawCircle(x, y, r * 0.18f, fill)
+        if (sinceShot < 0.07f) {
+            fill.color = Color.WHITE
+            c.drawCircle(x + r * 1.3f, y, r * 0.22f, fill)
+        }
+        c.restore()
     }
 
     /** Enemy [e] at screen position ([x], [y]), with status rings and health bars; [scale] is px per cell. */

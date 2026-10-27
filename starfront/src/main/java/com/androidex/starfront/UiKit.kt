@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import kotlin.math.min
 
 /**
  * Immediate-mode UI for the HUD, bottom panel and overlays: widgets are drawn every frame and
@@ -80,15 +81,32 @@ class UiKit(private val d: Float) {
         c.drawText(s, x, y, text)
     }
 
+    /**
+     * Splits [s] at its "·" separators into lines no wider than [maxW] in the current [text]
+     * size; a single part that is too wide stays on its own line.
+     */
+    fun wrap(s: String, maxW: Float): List<String> {
+        val lines = ArrayList<String>()
+        for (part in s.split(SEP)) {
+            val joined = if (lines.isEmpty()) part else lines.last() + SEP + part
+            if (lines.isNotEmpty() && text.measureText(joined) <= maxW) lines[lines.size - 1] = joined else lines.add(part)
+        }
+        return lines
+    }
+
     /** A dimmed full-screen menu below [top] with a title, subtitle and a row of buttons. */
     fun overlay(c: Canvas, top: Float, w: Float, h: Float, title: String, sub: String, buttonsSpec: List<Pair<String, () -> Unit>>) {
         fill.color = 0xC0000000.toInt()
         c.drawRect(0f, top, w, h, fill)
         val cx = w / 2f
         val cy = top + (h - top) / 2f
-        centerText(c, cx, cy - 40 * d, title, 28f, 0xFF64FFDA.toInt())
-        centerText(c, cx, cy - 10 * d, sub, 13f, 0xFFB0BEC5.toInt())
-        val bw = 170 * d
+        text.textSize = 13 * d
+        val subLines = wrap(sub, w - 32 * d)
+        val subTop = cy - 10 * d - (subLines.size - 1) * 18 * d
+        centerText(c, cx, subTop - 30 * d, title, 28f, 0xFF64FFDA.toInt())
+        subLines.forEachIndexed { i, line -> centerText(c, cx, subTop + i * 18 * d, line, 13f, 0xFFB0BEC5.toInt()) }
+        // Buttons shrink to fit a narrow (vertical) screen.
+        val bw = min(170 * d, (w - 32 * d - (buttonsSpec.size - 1) * 16 * d) / buttonsSpec.size)
         val total = buttonsSpec.size * bw + (buttonsSpec.size - 1) * 16 * d
         var x = cx - total / 2
         for ((label, action) in buttonsSpec) {
@@ -104,6 +122,8 @@ class UiKit(private val d: Float) {
     }
 
     companion object {
+        private const val SEP = "  ·  "
+
         fun fmt(v: Float) = if (v >= 10f) v.toInt().toString() else String.format("%.1f", v)
     }
 }

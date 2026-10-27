@@ -1,6 +1,7 @@
 package com.androidex.starfront
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -22,6 +23,7 @@ class MainActivity : Activity(), GameView.Listener {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         window.setDecorFitsSystemWindows(false)
+        applyOrientation(prefs.getBoolean(KEY_VERTICAL, false))
 
         val game = prefs.getString(KEY_SAVE, null)?.let { Game.restore(it) } ?: Game()
         sfx = SoundFx(this)
@@ -68,6 +70,16 @@ class MainActivity : Activity(), GameView.Listener {
         prefs.edit().putBoolean(KEY_MUTED, muted).apply()
     }
 
+    override fun onVerticalChanged(vertical: Boolean) {
+        prefs.edit().putBoolean(KEY_VERTICAL, vertical).apply()
+        applyOrientation(vertical)
+    }
+
+    private fun applyOrientation(vertical: Boolean) {
+        requestedOrientation =
+            if (vertical) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         sfx.release()
@@ -77,5 +89,6 @@ class MainActivity : Activity(), GameView.Listener {
         const val KEY_SAVE = "save"
         const val KEY_BEST = "best"
         const val KEY_MUTED = "muted"
+        const val KEY_VERTICAL = "vertical"
     }
 }

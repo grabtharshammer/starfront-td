@@ -46,6 +46,7 @@ class GameView(
         fun onGameOver(wave: Int)
         fun bestWave(): Int
         fun onMuteChanged(muted: Boolean)
+        fun onVerticalChanged(vertical: Boolean)
     }
 
     /** Receives the sounds to play each frame; null in headless use. */
@@ -54,13 +55,24 @@ class GameView(
     private val spatializer = Spatializer()
 
     private val d = resources.displayMetrics.density
-    private val hudH = 54 * d
-    private val panelH = 108 * d
     private val pad = 8 * d
+    private val hudRowH = 54 * d
+    private val cardRowH = 96 * d
 
-    // Safe area from display cutouts (landscape notch on the left or right).
-    private var safeL = 0f
-    private var safeR = 0f
+    /** Vertical mode: the HUD and the bottom panel take two rows each. */
+    private val vertical get() = height > width
+    private val hudH get() = safeT + if (vertical) 2 * hudRowH - 8 * d else hudRowH
+    private val panelH get() = if (vertical) 2 * cardRowH + 3 * pad else 108 * d
+
+    // Safe area from display cutouts (a notch on the left or right in landscape, at the top in portrait).
+    // Landscape also keeps the side controls out of the back-gesture zones; vertical mode needs the width.
+    private var cutL = 0f
+    private var cutR = 0f
+    private var gestureL = 0f
+    private var gestureR = 0f
+    private var safeT = 0f
+    private val safeL get() = if (vertical) cutL else gestureL
+    private val safeR get() = if (vertical) cutR else gestureR
 
     // Selection: a tower or an empty buildable cell.
     private var selected = false
@@ -69,7 +81,7 @@ class GameView(
     // Tower type previewed on the selected empty cell: first tap on a build card previews, second buys.
     private var preview: TowerType? = null
 
-    private val camera = Camera(hudH, { game.world }, { if (selected) panelH else 0f })
+    private val camera = Camera({ hudH }, { game.world }, { if (selected) panelH else 0f })
     private val sprites = Sprites(d)
     private val renderer = WorldRenderer(d, camera, sprites)
     private val ui = UiKit(d)
@@ -149,8 +161,12 @@ class GameView(
         isHapticFeedbackEnabled = true
         setOnApplyWindowInsetsListener { _, insets ->
             val cut = insets.getInsets(WindowInsets.Type.displayCutout() or WindowInsets.Type.systemGestures())
-            safeL = cut.left.toFloat()
-            safeR = cut.right.toFloat()
+            gestureL = cut.left.toFloat()
+            gestureR = cut.right.toFloat()
+            val notch = insets.getInsets(WindowInsets.Type.displayCutout())
+            cutL = notch.left.toFloat()
+            cutR = notch.right.toFloat()
+            safeT = notch.top.toFloat()
             insets
         }
     }
@@ -184,7 +200,8 @@ class GameView(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         renderer.resize(h)
-        camera.resize(w, h, first = oldw == 0)
+        // Switching between vertical and horizontal starts the view afresh.
+        camera.resize(w, h, first = oldw == 0 || (w > h) != (oldw > oldh))
     }
 
     private fun jumpMinimap(x: Float) = camera.jumpTo(((x - minimap.left) / minimap.width()).coerceIn(0f, 1f))
@@ -320,12 +337,14 @@ class GameView(
         text.textAlign = Paint.Align.CENTER
         text.textSize = 12 * d
         text.color = 0xCCB0BEC5.toInt()
+        val lines = ui.wrap(msg, width - 40 * d)
+        val lineH = 18 * d
         val y = hudH + 96 * d
-        val tw = text.measureText(msg)
-        rect.set(width / 2f - tw / 2 - 12 * d, y - 18 * d, width / 2f + tw / 2 + 12 * d, y + 8 * d)
+        val tw = lines.maxOf { text.measureText(it) }
+        rect.set(width / 2f - tw / 2 - 12 * d, y - 18 * d, width / 2f + tw / 2 + 12 * d, y + 8 * d + (lines.size - 1) * lineH)
         fill.color = 0xCC0A0F1C.toInt()
         c.drawRoundRect(rect, 12 * d, 12 * d, fill)
-        c.drawText(msg, width / 2f, y, text)
+        lines.forEachIndexed { i, line -> c.drawText(line, width / 2f, y + i * lineH, text) }
     }
 
     // ---- HUD ----
@@ -337,7 +356,8 @@ class GameView(
         stroke.color = 0xFF1E3A5F.toInt(); stroke.strokeWidth = 1.5f * d
         c.drawLine(0f, hudH, w, hudH, stroke)
 
-        val cy = hudH / 2
+        // Stats on the first row; the buttons share it in landscape and get a second row in vertical mode.
+        val cy = safeT + hudRowH / 2
         var x = safeL + 12 * d
         text.textAlign = Paint.Align.LEFT
         text.textSize = 17 * d
@@ -368,12 +388,15 @@ class GameView(
         c.drawText("${game.world.sections.size} SECT", x + 48 * d, cy - 4 * d, text)
         x += 48 * d + text.measureText("0000 SECT") + 12 * d
 
-        // Right-side buttons, laid out from the right edge.
-        var rx = w - safeR - 8 * d
-        val bh = hudH - 14 * d
-        val by = 7 * d
+        // Buttons, laid out from the right edge.
+        val right = w - safeR - 8 * d
+        var rx = right
+        val bh = hudRowH - 14 * d
+        val by = safeT + if (vertical) hudRowH - 2 * d else 7 * d
+        val bcy = by + bh / 2
 
-        val launchW = 136 * d
+        // In vertical mode the launch button takes whatever the toggles leave.
+        val launchW = if (vertical) right - (safeL + 8 * d) - (52 + 52 + 48 + 44 + 4 * 6) * d else 136 * d
         rect.set(rx - launchW, by, rx, by + bh)
         if (game.phase == Phase.BUILD) {
             val r = RectF(rect)
@@ -425,12 +448,12 @@ class GameView(
         ui.hudButton(c, rx - pauseW, by, rx, by + bh, "", paused) { paused = !paused }
         fill.color = Color.WHITE
         val pcx = rx - pauseW / 2
-        c.drawRect(pcx - 6 * d, cy - 8 * d, pcx - 2 * d, cy + 8 * d, fill)
-        c.drawRect(pcx + 2 * d, cy - 8 * d, pcx + 6 * d, cy + 8 * d, fill)
+        c.drawRect(pcx - 6 * d, bcy - 8 * d, pcx - 2 * d, bcy + 8 * d, fill)
+        c.drawRect(pcx + 2 * d, bcy - 8 * d, pcx + 6 * d, bcy + 8 * d, fill)
         rx -= pauseW + 12 * d
 
-        // Minimap fills the gap.
-        minimap.set(x, 8 * d, rx, hudH - 8 * d)
+        // Minimap fills the gap after the stats.
+        minimap.set(x, safeT + 8 * d, if (vertical) right else rx, safeT + hudRowH - 8 * d)
         if (minimap.width() > 60 * d) drawMinimap(c) else minimap.setEmpty()
     }
 
@@ -489,18 +512,26 @@ class GameView(
     }
 
     /**
-     * One card per tower type for an empty cell. The first tap on a card previews that tower
-     * (ghost and range on the map); a second tap on the same card buys it.
+     * One card per tower type for an empty cell, in one row (or rows of three in vertical mode).
+     * The first tap on a card previews that tower (ghost and range on the map); a second tap on
+     * the same card buys it.
      */
     private fun drawBuildCards(c: Canvas, l: Float, r: Float, ct: Float, cb: Float) {
         val types = TowerType.entries
-        val cw = min(190 * d, (r - l - pad * (types.size - 1)) / types.size)
-        var x = l
-        for (type in types) {
+        val perRow = if (vertical) 3 else types.size
+        val rows = (types.size + perRow - 1) / perRow
+        val cw = min(190 * d, (r - l - pad * (perRow - 1)) / perRow)
+        val ch = (cb - ct - pad * (rows - 1)) / rows
+        // Narrow cards stack the title under the icon instead of beside it.
+        val compact = cw < 150 * d
+        for ((i, type) in types.withIndex()) {
+            val x = l + (i % perRow) * (cw + pad)
+            val t = ct + (i / perRow) * (ch + pad)
+            val b = t + ch
             val powered = game.hasPowerFor(type, selCol)
             val ok = game.credits >= type.cost && powered
             val previewing = preview == type
-            ui.card(c, x, ct, x + cw, cb, if (ok || previewing) type.color else 0xFF37474F.toInt(), true, dimmed = !ok, highlight = previewing) {
+            ui.card(c, x, t, x + cw, b, if (ok || previewing) type.color else 0xFF37474F.toInt(), true, dimmed = !ok, highlight = previewing) {
                 when {
                     !previewing -> preview = type
                     game.build(type, selCol, selRow) != null -> {
@@ -510,31 +541,48 @@ class GameView(
                     else -> game.sound(Sfx.DENIED)
                 }
             }
-            sprites.tower(c, type, 1, x + 28 * d, ct + 30 * d, 44 * d, -0.6f, game.clock, 10f)
-            ui.cardText(c, x + 58 * d, ct + 22 * d, type.title.uppercase(), 11f, Color.WHITE, x + cw - 6 * d)
             val status = when {
                 !previewing -> type.blurb
                 !powered -> "NO POWER"
                 !ok -> "NEED CREDITS"
                 else -> "TAP TO BUY"
             }
-            ui.cardText(c, x + 58 * d, ct + 40 * d, status, 10f, if (!previewing) 0xFF90A4AE.toInt() else if (ok) 0xFF69F0AE.toInt() else 0xFFFF5252.toInt(), x + cw - 6 * d)
-            ui.cardText(c, x + 10 * d, cb - 12 * d, "${type.cost}", 15f, if (game.credits >= type.cost) 0xFFFFD740.toInt() else 0xFFFF5252.toInt(), x + cw)
-            ui.cardText(c, x + cw * 0.42f, cb - 12 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
-            ui.cardText(c, x + cw * 0.7f, cb - 12 * d, "P${type.power}", 10f, if (powered) 0xFF40C4FF.toInt() else 0xFFFF5252.toInt(), x + cw)
-            x += cw + pad
+            val statusColor = if (!previewing) 0xFF90A4AE.toInt() else if (ok) 0xFF69F0AE.toInt() else 0xFFFF5252.toInt()
+            val costColor = if (game.credits >= type.cost) 0xFFFFD740.toInt() else 0xFFFF5252.toInt()
+            val powerColor = if (powered) 0xFF40C4FF.toInt() else 0xFFFF5252.toInt()
+            if (compact) {
+                sprites.tower(c, type, 1, x + 24 * d, t + 24 * d, 36 * d, -0.6f, game.clock, 10f)
+                ui.cardText(c, x + 50 * d, t + 30 * d, "${type.cost}", 15f, costColor, x + cw)
+                ui.cardText(c, x + 10 * d, t + 56 * d, type.title.uppercase(), 11f, Color.WHITE, x + cw - 6 * d)
+                ui.cardText(c, x + 10 * d, t + 72 * d, status, 10f, statusColor, x + cw - 6 * d)
+                ui.cardText(c, x + 10 * d, b - 9 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
+                ui.cardText(c, x + cw * 0.55f, b - 9 * d, "P${type.power}", 10f, powerColor, x + cw)
+            } else {
+                sprites.tower(c, type, 1, x + 28 * d, t + 30 * d, 44 * d, -0.6f, game.clock, 10f)
+                ui.cardText(c, x + 58 * d, t + 22 * d, type.title.uppercase(), 11f, Color.WHITE, x + cw - 6 * d)
+                ui.cardText(c, x + 58 * d, t + 40 * d, status, 10f, statusColor, x + cw - 6 * d)
+                ui.cardText(c, x + 10 * d, b - 12 * d, "${type.cost}", 15f, costColor, x + cw)
+                ui.cardText(c, x + cw * 0.42f, b - 12 * d, "R${fmt(type.range)}", 10f, 0xFF7FA7D9.toInt(), x + cw)
+                ui.cardText(c, x + cw * 0.7f, b - 12 * d, "P${type.power}", 10f, powerColor, x + cw)
+            }
         }
     }
 
-    /** Info, upgrade, targeting and sell for a tower, then a swap card per other type. */
-    private fun drawTowerCards(c: Canvas, tower: Tower, l: Float, r: Float, ct: Float, cb: Float) {
+    /**
+     * Info, upgrade, targeting and sell for a tower, then a swap card per other type: all in one
+     * row, or with the swaps on a second row in vertical mode.
+     */
+    private fun drawTowerCards(c: Canvas, tower: Tower, l: Float, r: Float, ct: Float, panelB: Float) {
         val others = TowerType.entries.filter { it != tower.type }
-        val units = 2.4f + 1.25f + 1f + 1f + others.size
         val gap = pad * 0.75f
-        val unit = min(120 * d, (r - l - gap * (3 + others.size)) / units)
+        // In vertical mode the info card takes a little more of its row so its stats line fits.
+        val infoUnits = if (vertical) 2.7f else 2.4f
+        val mainUnits = infoUnits + 1.25f + 1f + 1f
+        val cb = if (vertical) (ct + panelB - pad) / 2 else panelB
+        val unit = if (vertical) (r - l - gap * 3) / mainUnits else min(120 * d, (r - l - gap * (3 + others.size)) / (mainUnits + others.size))
         var x = l
 
-        val iw = unit * 2.4f
+        val iw = unit * infoUnits
         ui.card(c, x, ct, x + iw, cb, tower.type.color, true, action = null)
         sprites.tower(c, tower.type, tower.level, x + 30 * d, ct + 32 * d, 46 * d, tower.angle, game.clock, 10f)
         ui.cardText(c, x + 60 * d, ct + 20 * d, tower.type.title.uppercase(), 12f, Color.WHITE, x + iw - 4 * d)
@@ -573,6 +621,14 @@ class GameView(
         ui.centerText(c, x + unit / 2, ct + 52 * d, "+${tower.sellValue}", 14f, 0xFFFFD740.toInt())
         x += unit + gap
 
+        if (vertical) drawSwapCards(c, tower, others, l, r, cb + pad, panelB, null, gap)
+        else drawSwapCards(c, tower, others, x, r, ct, panelB, unit, gap)
+    }
+
+    /** One card per other type that [tower] can be swapped for, [cardW] wide or (when null) sharing the row between [l] and [r]. */
+    private fun drawSwapCards(c: Canvas, tower: Tower, others: List<TowerType>, l: Float, r: Float, ct: Float, cb: Float, cardW: Float?, gap: Float) {
+        val unit = cardW ?: min(120 * d, (r - l - gap * (others.size - 1)) / others.size)
+        var x = l
         for (type in others) {
             val cost = game.replaceCost(tower, type)
             val powered = game.hasPowerToReplace(tower, type)
@@ -637,6 +693,7 @@ class GameView(
         ui.overlay(c, hudH, width.toFloat(), height.toFloat(), "PAUSED", "Wave ${game.wave}  ·  ${game.towers.size} towers  ·  ${game.world.sections.size} sectors", listOf(
             "RESUME" to { paused = false },
             "NEW GAME" to { newGame() },
+            (if (vertical) "HORIZONTAL" else "VERTICAL") to { listener.onVerticalChanged(!vertical) },
         ))
     }
 

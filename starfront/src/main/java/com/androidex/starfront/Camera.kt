@@ -9,11 +9,11 @@ import kotlin.math.min
 
 /**
  * Maps world cells to screen pixels and keeps the view on the playfield. The map area starts
- * [top] px below the top of the screen (under the HUD); [scale] is pixels per cell and [x], [y]
- * the world point at the map area's top-left corner.
+ * [top] px below the top of the screen (under the HUD, which is taller in vertical mode); [scale]
+ * is pixels per cell and [x], [y] the world point at the map area's top-left corner.
  */
 class Camera(
-    private val top: Float,
+    private val topPx: () -> Float,
     private val world: () -> World,
     /** Height in px currently covered by the bottom panel (0 when closed). */
     private val panelPx: () -> Float,
@@ -28,6 +28,7 @@ class Camera(
     private var flingVY = 0f
     private var screenW = 0
     private var screenH = 0
+    private val top get() = topPx()
 
     /** World x range the camera may show: one uncharted sector beyond the frontier, to just past the core. */
     val worldLeft get() = world().minCol - SECTION_COLS.toFloat()
@@ -44,12 +45,13 @@ class Camera(
         screenW = w
         screenH = h
         val oldFit = fitScale
-        fitScale = (h - top) / (ROWS + 1.5f)
+        // Fit the field's height, but on a narrow (vertical) screen keep at least MIN_COLS columns in view.
+        fitScale = min((h - top) / (ROWS + 1.5f), w / MIN_COLS)
         scale = if (first) fitScale else scale * fitScale / oldFit
         if (first) reset() else clamp()
     }
 
-    /** Fit the field's height and show the core end. */
+    /** Fit the field and show the core end. */
     fun reset() {
         scale = fitScale
         x = worldRight - viewW
@@ -125,5 +127,9 @@ class Camera(
             flingVY *= 0.9f
             clamp()
         }
+    }
+
+    private companion object {
+        const val MIN_COLS = 8f
     }
 }

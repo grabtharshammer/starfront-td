@@ -100,8 +100,8 @@ object Balance {
     // ---- Sectors and power ----
     const val WAVES_PER_SECTOR = 5
     /** Power available for towers in each sector (the core sector is larger). */
-    const val FIRST_SECTION_POWER = 12
-    const val SECTION_POWER = 10
+    const val FIRST_SECTION_POWER = 17
+    const val SECTION_POWER = 15
     /** Extra power a sector earns once it is fully built out and every tower in it is maxed. */
     const val EFFICIENCY_BONUS = 5
 

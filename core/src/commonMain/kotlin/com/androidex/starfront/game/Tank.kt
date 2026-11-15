@@ -1,5 +1,6 @@
 package com.androidex.starfront.game
 
+import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
 
@@ -132,12 +133,12 @@ class TankBay(private val game: Game) {
             val u = (t.dist - end) / Balance.TANK_PARK_OFFSET
             t.x = parkX
             t.y = world.coreRow + 0.5f + Balance.TANK_PARK_OFFSET * u
-            t.heading = -Math.PI.toFloat() / 2
+            t.heading = -PI.toFloat() / 2
         } else {
             world.positionAt(t.dist, tmp)
             t.x = tmp[0]; t.y = tmp[1]
             // The route heads east; the tank faces the other way.
-            t.heading = tmp[2] + Math.PI.toFloat()
+            t.heading = tmp[2] + PI.toFloat()
         }
     }
 }

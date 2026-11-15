@@ -1,14 +1,12 @@
 package com.androidex.starfront
 
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.DashPathEffect
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.graphics.Shader
-import android.graphics.Typeface
+import com.androidex.starfront.gfx.Canvas
+import com.androidex.starfront.gfx.Color
+import com.androidex.starfront.gfx.DashPathEffect
+import com.androidex.starfront.gfx.LinearGradient
+import com.androidex.starfront.gfx.Paint
+import com.androidex.starfront.gfx.Path
+import com.androidex.starfront.gfx.RectF
 import com.androidex.starfront.game.BARRIER_COLOR
 import com.androidex.starfront.game.Balance
 import com.androidex.starfront.game.Cell
@@ -32,11 +30,11 @@ import kotlin.random.Random
  * core, towers, enemies, shots and effects. [d] is the display density.
  */
 class WorldRenderer(private val d: Float, private val camera: Camera, private val sprites: Sprites) {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
-    private val gridPaint = Paint().apply { color = 0xFF16233A.toInt(); strokeWidth = 1f }
-    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); color = Color.WHITE }
-    private val bg = Paint()
+    private val fill = Paint()
+    private val stroke = Paint().apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    private val gridPaint = Paint().apply { isAntiAlias = false; color = 0xFF16233A.toInt(); strokeWidth = 1f }
+    private val text = Paint().apply { color = Color.WHITE }
+    private val bg = Paint().apply { isAntiAlias = false }
     private val path = Path()
     private val rect = RectF()
     /** Cosmetic randomness only (star field, lightning jitter). */
@@ -50,7 +48,7 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
     private fun sy(wy: Float) = camera.sy(wy)
 
     fun resize(h: Int) {
-        bg.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF04050D.toInt(), 0xFF0D0820.toInt(), Shader.TileMode.CLAMP)
+        bg.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF04050D.toInt(), 0xFF0D0820.toInt())
     }
 
     /** Draws the whole field; [selection] is the highlighted cell, if any, and [preview] a tower type being considered for it. */
@@ -302,7 +300,7 @@ class WorldRenderer(private val d: Float, private val camera: Camera, private va
             drawRange(c, cx, cy, t.range, t.type.color)
         } else if (preview != null) {
             drawRange(c, cx, cy, Balance.range(preview.range, 1), preview.color)
-            c.saveLayerAlpha(null, 120)
+            c.saveLayerAlpha(120)
             sprites.tower(c, preview, 1, cx, cy, scale, -0.6f, time, 10f)
             c.restore()
         }

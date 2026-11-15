@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "StarfrontTD"
 include(":starfront")
+include(":core")
+include(":ios")

@@ -1,5 +1,6 @@
 package com.androidex.starfront.game
 
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -9,7 +10,7 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     var level = 1
     var invested = type.cost
     var cooldown = 0f
-    var angle = -Math.PI.toFloat() / 2
+    var angle = -PI.toFloat() / 2
     var mode = TargetMode.FIRST
     var kills = 0
     /** Seconds since the last shot, for muzzle-flash drawing. */

@@ -10,7 +10,7 @@ import android.window.OnBackInvokedDispatcher
 import com.androidex.starfront.audio.SoundFx
 import com.androidex.starfront.game.Game
 
-class MainActivity : Activity(), GameView.Listener {
+class MainActivity : Activity(), GameView.Host {
 
     private lateinit var view: GameView
     private lateinit var sfx: SoundFx
@@ -28,8 +28,8 @@ class MainActivity : Activity(), GameView.Listener {
         val game = prefs.getString(KEY_SAVE, null)?.let { Game.restore(it) } ?: Game()
         sfx = SoundFx(this)
         view = GameView(this, game, this)
-        view.soundSink = sfx::play
-        view.muted = prefs.getBoolean(KEY_MUTED, false)
+        view.screen.soundSink = sfx::play
+        view.screen.muted = prefs.getBoolean(KEY_MUTED, false)
         setContentView(view)
 
         window.insetsController?.apply {

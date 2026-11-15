@@ -1,11 +1,11 @@
 package com.androidex.starfront.audio
 
 import com.androidex.starfront.game.Sfx
-import java.io.ByteArrayOutputStream
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -95,14 +95,17 @@ object Synth {
     /** Encodes samples in [-1, 1] as a 16-bit mono WAV file. */
     fun wav(samples: FloatArray): ByteArray {
         val dataLen = samples.size * 2
-        val out = ByteArrayOutputStream(44 + dataLen)
-        fun i32(v: Int) { out.write(v and 0xff); out.write(v shr 8 and 0xff); out.write(v shr 16 and 0xff); out.write(v shr 24 and 0xff) }
-        fun i16(v: Int) { out.write(v and 0xff); out.write(v shr 8 and 0xff) }
-        out.write("RIFF".toByteArray()); i32(36 + dataLen); out.write("WAVE".toByteArray())
-        out.write("fmt ".toByteArray()); i32(16); i16(1); i16(1); i32(RATE); i32(RATE * 2); i16(2); i16(16)
-        out.write("data".toByteArray()); i32(dataLen)
+        val out = ByteArray(44 + dataLen)
+        var pos = 0
+        fun i8(v: Int) { out[pos++] = v.toByte() }
+        fun i32(v: Int) { i8(v); i8(v shr 8); i8(v shr 16); i8(v shr 24) }
+        fun i16(v: Int) { i8(v); i8(v shr 8) }
+        fun tag(t: String) { for (ch in t) i8(ch.code) }
+        tag("RIFF"); i32(36 + dataLen); tag("WAVE")
+        tag("fmt "); i32(16); i16(1); i16(1); i32(RATE); i32(RATE * 2); i16(2); i16(16)
+        tag("data"); i32(dataLen)
         for (s in samples) i16((s.coerceIn(-1f, 1f) * 32767).toInt())
-        return out.toByteArray()
+        return out
     }
 
     // ---- Building blocks ----
@@ -132,7 +135,7 @@ object Synth {
         var phase = 0.0
         for (i in 0 until n) {
             val u = i.toFloat() / n
-            var f = f0 * Math.pow((f1 / f0).toDouble(), u.toDouble()).toFloat()
+            var f = f0 * (f1 / f0).pow(u)
             if (vibrato > 0f) f *= 1f + 0.02f * sin(2 * PI * vibrato * i / RATE).toFloat()
             phase += f / RATE
             val p = phase - kotlin.math.floor(phase)

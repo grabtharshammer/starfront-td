@@ -1,10 +1,11 @@
 package com.androidex.starfront
 
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
+import kotlin.math.PI
+import com.androidex.starfront.gfx.Canvas
+import com.androidex.starfront.gfx.Color
+import com.androidex.starfront.gfx.Paint
+import com.androidex.starfront.gfx.Path
+import com.androidex.starfront.gfx.RectF
 import com.androidex.starfront.game.BARRIER_COLOR
 import com.androidex.starfront.game.Balance
 import com.androidex.starfront.game.Enemy
@@ -16,11 +17,14 @@ import com.androidex.starfront.game.Weapon
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** Radians to degrees. */
+fun deg(rad: Float) = rad * (180f / PI.toFloat())
+
 /** Builds a regular polygon centred on ([x], [y]) into this path. */
 fun Path.regularPolygon(x: Float, y: Float, r: Float, sides: Int, rot: Float) {
     reset()
     for (i in 0 until sides) {
-        val a = rot + i * 2f * Math.PI.toFloat() / sides
+        val a = rot + i * 2f * PI.toFloat() / sides
         val px = x + cos(a) * r
         val py = y + sin(a) * r
         if (i == 0) moveTo(px, py) else lineTo(px, py)
@@ -30,8 +34,8 @@ fun Path.regularPolygon(x: Float, y: Float, r: Float, sides: Int, rot: Float) {
 
 /** Tower, enemy and tank artwork, drawn at screen positions. [d] is the display density. */
 class Sprites(private val d: Float) {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    private val fill = Paint()
+    private val stroke = Paint().apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val path = Path()
     private val rect = RectF()
 
@@ -47,9 +51,9 @@ class Sprites(private val d: Float) {
         stroke.color = col; stroke.alpha = 120; stroke.strokeWidth = s * 0.04f
         c.drawCircle(x, y, s * 0.3f, stroke)
         stroke.alpha = 255
-        val deg = Math.toDegrees(angle.toDouble()).toFloat()
+        val turn = deg(angle)
         c.save()
-        c.rotate(deg, x, y)
+        c.rotate(turn, x, y)
         when (type) {
             TowerType.PULSE -> {
                 stroke.color = 0xFFCFD8DC.toInt(); stroke.strokeWidth = s * 0.07f
@@ -70,10 +74,10 @@ class Sprites(private val d: Float) {
                 c.drawCircle(x, y, s * (0.09f + 0.02f * sin(time * 5f)), fill)
             }
             TowerType.CRYO -> {
-                c.rotate(time * 40f - deg, x, y)
+                c.rotate(time * 40f - turn, x, y)
                 stroke.color = col; stroke.strokeWidth = s * 0.05f
                 for (i in 0 until 6) {
-                    val a = i * Math.PI.toFloat() / 3
+                    val a = i * PI.toFloat() / 3
                     c.drawLine(x, y, x + cos(a) * s * 0.3f, y + sin(a) * s * 0.3f, stroke)
                 }
                 fill.color = 0xFFE1F5FE.toInt()
@@ -136,7 +140,7 @@ class Sprites(private val d: Float) {
 
     /** A tank waiting in its bay, facing north toward the core. */
     fun parkedTank(c: Canvas, x: Float, y: Float, scale: Float, time: Float) {
-        val up = -Math.PI.toFloat() / 2
+        val up = -PI.toFloat() / 2
         tankBody(c, x, y, scale, up, up, time, moving = false, sinceShot = 10f)
     }
 
@@ -144,7 +148,7 @@ class Sprites(private val d: Float) {
         val r = Balance.TANK_RADIUS * s
         val col = Balance.TANK_COLOR
         c.save()
-        c.rotate(Math.toDegrees(heading.toDouble()).toFloat(), x, y)
+        c.rotate(deg(heading), x, y)
         // Treads, with links that roll while it drives.
         fill.color = 0xFF263238.toInt()
         rect.set(x - r * 1.1f, y - r * 0.95f, x + r * 1.1f, y - r * 0.5f)
@@ -168,7 +172,7 @@ class Sprites(private val d: Float) {
         c.restore()
         // Turret and barrel, turned toward its target.
         c.save()
-        c.rotate(Math.toDegrees(aim.toDouble()).toFloat(), x, y)
+        c.rotate(deg(aim), x, y)
         stroke.color = 0xFFB0BEC5.toInt(); stroke.strokeWidth = r * 0.2f
         stroke.strokeCap = Paint.Cap.BUTT
         c.drawLine(x, y, x + r * 1.25f, y, stroke)
@@ -195,7 +199,7 @@ class Sprites(private val d: Float) {
             c.drawOval(rect, fill)
         }
         c.save()
-        c.rotate(Math.toDegrees(e.heading.toDouble()).toFloat(), x, y)
+        c.rotate(deg(e.heading), x, y)
         fill.color = col
         stroke.color = 0xFF000000.toInt(); stroke.alpha = 120; stroke.strokeWidth = r * 0.15f
         when (e.type) {
@@ -289,7 +293,7 @@ class Sprites(private val d: Float) {
                 c.rotate(time * 50f, x, y)
                 stroke.color = col; stroke.alpha = 255; stroke.strokeWidth = r * 0.12f
                 for (i in 0 until 8) {
-                    val a = i * Math.PI.toFloat() / 4
+                    val a = i * PI.toFloat() / 4
                     c.drawLine(x + cos(a) * r * 0.8f, y + sin(a) * r * 0.8f, x + cos(a) * r * 1.25f, y + sin(a) * r * 1.25f, stroke)
                 }
                 fill.color = 0xFF3A0048.toInt()

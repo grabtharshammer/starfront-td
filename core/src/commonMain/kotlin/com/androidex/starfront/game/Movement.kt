@@ -1,5 +1,6 @@
 package com.androidex.starfront.game
 
+import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.max
@@ -144,7 +145,7 @@ class Movement(private val game: Game) {
         val y0 = world.frontier.entryRow + 0.5f
         val y1 = world.coreRow + 0.5f
         // Weave is widest mid-flight and pinches in at the gate and the core.
-        val envelope = sin(Math.PI.toFloat() * u).pow(0.6f)
+        val envelope = sin(PI.toFloat() * u).pow(0.6f)
         out[0] = airStartX + d
         out[1] = (y0 + (y1 - y0) * u + e.waveAmp * envelope * sin(d * e.waveFreq + e.wavePhase)).coerceIn(0.4f, ROWS - 0.4f)
     }

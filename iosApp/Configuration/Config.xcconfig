@@ -1,0 +1,7 @@
+// Signing for your own iPhone. Either fill these in, or pick your team and change the bundle ID
+// under the iosApp target's Signing & Capabilities tab in Xcode.
+//
+// The bundle ID must be unique to you (a free Apple ID can't reuse one someone else registered),
+// e.g. com.yourname.starfront.
+BUNDLE_ID = com.androidex.starfront
+TEAM_ID =

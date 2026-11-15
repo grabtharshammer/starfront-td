@@ -1,12 +1,13 @@
 package com.androidex.starfront
 
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.graphics.Typeface
+import com.androidex.starfront.gfx.Canvas
+import com.androidex.starfront.gfx.Color
+import com.androidex.starfront.gfx.Paint
+import com.androidex.starfront.gfx.Path
+import com.androidex.starfront.gfx.RectF
+import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Immediate-mode UI for the HUD, bottom panel and overlays: widgets are drawn every frame and
@@ -18,9 +19,9 @@ class UiKit(private val d: Float) {
     /** Tap targets laid out during the last frame, in drawing order. */
     val buttons = ArrayList<Btn>()
 
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); color = Color.WHITE }
+    val fill = Paint()
+    val stroke = Paint().apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    val text = Paint().apply { color = Color.WHITE }
     val path = Path()
     val rect = RectF()
 
@@ -124,6 +125,12 @@ class UiKit(private val d: Float) {
     companion object {
         private const val SEP = "  ·  "
 
-        fun fmt(v: Float) = if (v >= 10f) v.toInt().toString() else String.format("%.1f", v)
+        fun fmt(v: Float) = if (v >= 10f) v.toInt().toString() else oneDecimal(v)
+
+        /** [v] rounded to one decimal place, like "%.1f". */
+        fun oneDecimal(v: Float): String {
+            val tenths = (abs(v) * 10f).roundToInt()
+            return (if (v < 0f && tenths != 0) "-" else "") + "${tenths / 10}.${tenths % 10}"
+        }
     }
 }
